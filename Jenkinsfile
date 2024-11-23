@@ -827,7 +827,7 @@ void initialize() {
 	// Ninja in our file credentials from Jenkins.
 	withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
 	    // Try and ssh fuse skyhook onto our local system.
-	    sh 'sshfs -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY-o StrictHostKeyChecking=accept-new -o idmap=user skyhook@skyhook.geneontology.io:/home/skyhook $WORKSPACE/mnt/'
+	    sh 'sshfs -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY -o idmap=user skyhook@skyhook.geneontology.io:/home/skyhook $WORKSPACE/mnt/'
 	}
 	// Remove anything we might have left around from
 	// times past.
