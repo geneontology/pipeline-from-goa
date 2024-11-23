@@ -825,7 +825,7 @@ void initialize() {
 	// Get a mount point ready
 	sh 'mkdir -p $WORKSPACE/mnt || true'
 	// Ninja in our file credentials from Jenkins.
-	withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), file(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+	withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
 	    // Try and ssh fuse skyhook onto our local system.
 	    sh 'sshfs -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY -o idmap=user skyhook@$SKYHOOK_MACHINE:/home/skyhook $WORKSPACE/mnt/'
 	}
