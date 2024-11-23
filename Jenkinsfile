@@ -164,7 +164,7 @@ pipeline {
 		watchdog();
 
 		// Give us a minute to cancel if we want.
-		sleep time: 1, unit: 'MINUTES'
+//		sleep time: 1, unit: 'MINUTES'
 		cleanWs deleteDirs: true, disableDeferredWipeout: true
 	    }
 	}
@@ -190,11 +190,12 @@ pipeline {
 		}
 
 		// Reset base.
-		initialize();
+//		initialize();
 
 		sh 'env > env.txt'
 		sh 'echo $BRANCH_NAME > branch.txt'
 		sh 'echo "$BRANCH_NAME"'
+		sh 'echo "$JOB_NAME"'
 		sh 'cat env.txt'
 		sh 'cat branch.txt'
 		sh 'echo $START_DAY > dow.txt'
@@ -242,99 +243,99 @@ pipeline {
 	//     }
 	// }
 
-	//...
-	stage('Produce derivatives (*)') {
-	    agent {
-		docker {
-		    image 'geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master'
-		    // Reset Jenkins Docker agent default to original
-		    // root.
-		    args '-u root:root --mount type=tmpfs,destination=/srv/solr/data'
-		}
-	    }
-	    // CHECKPOINT: Recover key environmental variables.
-	    environment {
-		START_DOW = sh(script: 'curl http://skyhook.berkeleybop.org/derivatives-from-goa/metadata/dow.txt', , returnStdout: true).trim()
-		START_DATE = sh(script: 'curl http://skyhook.berkeleybop.org/derivatives-from-goa/metadata/date.txt', , returnStdout: true).trim()
-	    }
+	// //...
+	// stage('Produce derivatives (*)') {
+	//     agent {
+	// 	docker {
+	// 	    image 'geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master'
+	// 	    // Reset Jenkins Docker agent default to original
+	// 	    // root.
+	// 	    args '-u root:root --mount type=tmpfs,destination=/srv/solr/data'
+	// 	}
+	//     }
+	//     // CHECKPOINT: Recover key environmental variables.
+	//     environment {
+	// 	START_DOW = sh(script: 'curl http://skyhook.berkeleybop.org/derivatives-from-goa/metadata/dow.txt', , returnStdout: true).trim()
+	// 	START_DATE = sh(script: 'curl http://skyhook.berkeleybop.org/derivatives-from-goa/metadata/date.txt', , returnStdout: true).trim()
+	//     }
 
-	    steps {
+	//     steps {
 
-		// Build index into tmpfs.
-		sh 'bash /tmp/run-indexer.sh'
+	// 	// Build index into tmpfs.
+	// 	sh 'bash /tmp/run-indexer.sh'
 
-		// Immediately check to see if it looks like we have
-		// enough docs when trying a
-		// release. SANITY_SOLR_DOC_COUNT_MIN must be greater
-		// than what we seen in the index.
-		script {
-		    if( env.BRANCH_NAME == 'release' ){
+	// 	// Immediately check to see if it looks like we have
+	// 	// enough docs when trying a
+	// 	// release. SANITY_SOLR_DOC_COUNT_MIN must be greater
+	// 	// than what we seen in the index.
+	// 	script {
+	// 	    if( env.BRANCH_NAME == 'release' ){
 
-			// Test overall.
-			echo "SANITY_SOLR_DOC_COUNT_MIN:${env.SANITY_SOLR_DOC_COUNT_MIN}"
-			sh 'curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json"'
-			sh 'if [ $SANITY_SOLR_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
+	// 		// Test overall.
+	// 		echo "SANITY_SOLR_DOC_COUNT_MIN:${env.SANITY_SOLR_DOC_COUNT_MIN}"
+	// 		sh 'curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json"'
+	// 		sh 'if [ $SANITY_SOLR_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
 
-			// Test bioentity.
-			echo "SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN:${env.SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN}"
-			sh 'curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity"'
-			sh 'if [ $SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
-		    }
-		}
+	// 		// Test bioentity.
+	// 		echo "SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN:${env.SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN}"
+	// 		sh 'curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity"'
+	// 		sh 'if [ $SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
+	// 	    }
+	// 	}
 
-		// Copy tmpfs Solr contents onto skyhook.
-		sh 'tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index .'
-		withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
-		    // Copy over index.
-		    // Copy over log.
-		    //sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" /tmp/golr-index-contents.tgz skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/products/solr/'
-		    //sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" /tmp/golr_timestamp.log skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/products/solr/'
-		    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/golr-index-contents.tgz skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/products/solr/'
-		    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/golr_timestamp.log skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/products/solr/'
-		}
+	// 	// Copy tmpfs Solr contents onto skyhook.
+	// 	sh 'tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index .'
+	// 	withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
+	// 	    // Copy over index.
+	// 	    // Copy over log.
+	// 	    //sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" /tmp/golr-index-contents.tgz skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/products/solr/'
+	// 	    //sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" /tmp/golr_timestamp.log skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/products/solr/'
+	// 	    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/golr-index-contents.tgz skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/products/solr/'
+	// 	    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/golr_timestamp.log skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/products/solr/'
+	// 	}
 
-		// Solr should still be running in the background here
-		// from indexing--create stats products from running
-		// GOlr.
-		// Prepare a working directory based around go-site.
-		dir('./go-stats') {
-		    git branch: TARGET_GO_STATS_BRANCH, url: 'https://github.com/geneontology/go-stats.git'
+	// 	// Solr should still be running in the background here
+	// 	// from indexing--create stats products from running
+	// 	// GOlr.
+	// 	// Prepare a working directory based around go-site.
+	// 	dir('./go-stats') {
+	// 	    git branch: TARGET_GO_STATS_BRANCH, url: 'https://github.com/geneontology/go-stats.git'
 
-		    // Not much want or need here--simple
-		    // python3. However, using the information hidden
-		    // in run-indexer.sh to know where the Solr
-		    // instance is hiding.
-		    sh 'mkdir -p /tmp/stats/ || true'
-		    sh 'cp ./libraries/go-stats/*.py /tmp'
-		    // Needed as extra library.
-		    sh 'pip3 install --force-reinstall requests==2.19.1'
-		    sh 'pip3 install --force-reinstall networkx==2.2'
+	// 	    // Not much want or need here--simple
+	// 	    // python3. However, using the information hidden
+	// 	    // in run-indexer.sh to know where the Solr
+	// 	    // instance is hiding.
+	// 	    sh 'mkdir -p /tmp/stats/ || true'
+	// 	    sh 'cp ./libraries/go-stats/*.py /tmp'
+	// 	    // Needed as extra library.
+	// 	    sh 'pip3 install --force-reinstall requests==2.19.1'
+	// 	    sh 'pip3 install --force-reinstall networkx==2.2'
 
-		    // Final command, sealed into docker work
-		    // environment.
-		    echo "Check that results have been stored properly"
-		    sh "curl 'http://localhost:8080/solr/select?q=*:*&rows=0'"
-		    echo "End of results"
-		    retry(3){
-			sh 'python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d $START_DATE'
-		    }
-		    retry(3) {
-		    	sh 'wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json'
-		    }
+	// 	    // Final command, sealed into docker work
+	// 	    // environment.
+	// 	    echo "Check that results have been stored properly"
+	// 	    sh "curl 'http://localhost:8080/solr/select?q=*:*&rows=0'"
+	// 	    echo "End of results"
+	// 	    retry(3){
+	// 		sh 'python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d $START_DATE'
+	// 	    }
+	// 	    retry(3) {
+	// 	    	sh 'wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json'
+	// 	    }
 
-		    // Roll the stats forward.
-		    sh 'python3 /tmp/aggregate-stats.py -a aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json'
+	// 	    // Roll the stats forward.
+	// 	    sh 'python3 /tmp/aggregate-stats.py -a aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json'
 
-		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
-		    	retry(3) {
-			    // Copy over stats files.
-			    //sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" /tmp/stats/* skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/release_stats/'
-			    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/stats/* skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/release_stats/'
-			}
-		    }
-		}
-	    }
-	}
+	// 	    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
+	// 	    	retry(3) {
+	// 		    // Copy over stats files.
+	// 		    //sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" /tmp/stats/* skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/release_stats/'
+	// 		    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/stats/* skyhook@skyhook.berkeleybop.org:/home/skyhook/derivatives-from-goa/release_stats/'
+	// 		}
+	// 	    }
+	// 	}
+	//     }
+	// }
 
 	// //...
 	// stage('Sanity II') {
@@ -771,33 +772,33 @@ pipeline {
 	//     }
 	// }
     }
-    post {
-	// Let's let our people know if things go well.
-	success {
-	    script {
-		if( env.BRANCH_NAME == 'release' || env.BRANCH_NAME == 'snapshot-post-fail' || env.BRANCH_NAME == 'derivatives-from-goa' ){
-		    echo "There has been a successful run of the ${env.BRANCH_NAME} pipeline."
-		    emailext to: "${TARGET_SUCCESS_EMAILS}",
-			subject: "GO Pipeline success for ${env.BRANCH_NAME}",
-			body: "There has been successful run of the ${env.BRANCH_NAME} pipeline. Please see: https://build.geneontology.org/job/geneontology/job/pipeline/job/${env.BRANCH_NAME}"
-		}
-	    }
-	}
-	// Let's let our internal people know if things change.
-	changed {
-	    echo "There has been a change in the ${env.BRANCH_NAME} pipeline."
-	    emailext to: "${TARGET_ADMIN_EMAILS}",
-		subject: "GO Pipeline change for ${env.BRANCH_NAME}",
-		body: "There has been a pipeline status change in ${env.BRANCH_NAME}. Please see: https://build.geneontology.org/job/geneontology/job/pipeline/job/${env.BRANCH_NAME}"
-	}
-	// Let's let our internal people know if things go badly.
-	failure {
-	    echo "There has been a failure in the ${env.BRANCH_NAME} pipeline."
-	    emailext to: "${TARGET_ADMIN_EMAILS}",
-		subject: "GO Pipeline FAIL for ${env.BRANCH_NAME}",
-		body: "There has been a pipeline failure in ${env.BRANCH_NAME}. Please see: https://build.geneontology.org/job/geneontology/job/pipeline/job/${env.BRANCH_NAME}"
-	}
-    }
+    // post {
+    // 	// Let's let our people know if things go well.
+    // 	success {
+    // 	    script {
+    // 		if( env.BRANCH_NAME == 'release' || env.BRANCH_NAME == 'snapshot-post-fail' || env.BRANCH_NAME == 'derivatives-from-goa' ){
+    // 		    echo "There has been a successful run of the ${env.BRANCH_NAME} pipeline."
+    // 		    emailext to: "${TARGET_SUCCESS_EMAILS}",
+    // 			subject: "GO Pipeline success for ${env.BRANCH_NAME}",
+    // 			body: "There has been successful run of the ${env.BRANCH_NAME} pipeline. Please see: https://build.geneontology.org/job/geneontology/job/pipeline/job/${env.BRANCH_NAME}"
+    // 		}
+    // 	    }
+    // 	}
+    // 	// Let's let our internal people know if things change.
+    // 	changed {
+    // 	    echo "There has been a change in the ${env.BRANCH_NAME} pipeline."
+    // 	    emailext to: "${TARGET_ADMIN_EMAILS}",
+    // 		subject: "GO Pipeline change for ${env.BRANCH_NAME}",
+    // 		body: "There has been a pipeline status change in ${env.BRANCH_NAME}. Please see: https://build.geneontology.org/job/geneontology/job/pipeline/job/${env.BRANCH_NAME}"
+    // 	}
+    // 	// Let's let our internal people know if things go badly.
+    // 	failure {
+    // 	    echo "There has been a failure in the ${env.BRANCH_NAME} pipeline."
+    // 	    emailext to: "${TARGET_ADMIN_EMAILS}",
+    // 		subject: "GO Pipeline FAIL for ${env.BRANCH_NAME}",
+    // 		body: "There has been a pipeline failure in ${env.BRANCH_NAME}. Please see: https://build.geneontology.org/job/geneontology/job/pipeline/job/${env.BRANCH_NAME}"
+    // 	}
+    // }
 }
 
 // Check that we do not affect public targets on non-mainline runs.
