@@ -250,16 +250,21 @@ pipeline {
 		    image 'geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master'
 		    // Reset Jenkins Docker agent default to original
 		    // root.
-		    args '--add-host host.docker.internal:host-gateway -u root:root --mount type=tmpfs,destination=/srv/solr/data'
+		    args '-u root:root --mount type=tmpfs,destination=/srv/solr/data'
 		}
 	    }
-	    // CHECKPOINT: Recover key environmental variables.
-	    environment {
-		START_DOW = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/dow.txt', , returnStdout: true).trim()
-		START_DATE = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/date.txt', , returnStdout: true).trim()
-	    }
+
+	    // // CHECKPOINT: Recover key environmental variables.
+	    // environment {
+	    // 	START_DOW = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/dow.txt', , returnStdout: true).trim()
+	    // 	START_DATE = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/date.txt', , returnStdout: true).trim()
+	    // }
 
 	    steps {
+
+		// WARNING: MEGAHACK
+		sh 'echo \'nameserver 8.8.8.8\' > /etc/resolv.conf'
+		sh 'echo \'search lbl.gov\' >> /etc/resolv.conf'
 
 		// Build index into tmpfs.
 		sh 'bash /tmp/run-indexer.sh'
