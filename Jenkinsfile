@@ -108,8 +108,8 @@ pipeline {
 	///
 
 	// GOlr load profile.
-	GOLR_SOLR_MEMORY = "128G"
-	GOLR_LOADER_MEMORY = "192G"
+	GOLR_SOLR_MEMORY = "256G"
+	GOLR_LOADER_MEMORY = "256G"
 	GOLR_INPUT_ONTOLOGIES = [
 	    "http://snapshot.geneontology.org/ontology/extensions/go-amigo.owl"
 	].join(" ")
