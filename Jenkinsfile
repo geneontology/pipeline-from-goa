@@ -782,7 +782,7 @@ pipeline {
 		    echo "There has been a successful run of the ${env.BRANCH_NAME} pipeline."
 		    emailext to: "${TARGET_SUCCESS_EMAILS}",
 			subject: "GO Pipeline success for ${env.BRANCH_NAME}",
-			body: "There has been successful run of the ${env.BRANCH_NAME} pipeline. Please see: https://build.geneontology.op/job/geneontology/job/pipeline-from-goa/job/${env.BRANCH_NAME}"
+			body: "There has been successful run of the ${env.BRANCH_NAME} pipeline. Please see: https://build.geneontology.io/job/geneontology/job/pipeline-from-goa/job/${env.BRANCH_NAME}"
 		}
 	    }
 	}
