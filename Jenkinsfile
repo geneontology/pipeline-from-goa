@@ -108,8 +108,8 @@ pipeline {
 	///
 
 	// GOlr load profile.
-	GOLR_SOLR_MEMORY = "256G"
-	GOLR_LOADER_MEMORY = "256G"
+	GOLR_SOLR_MEMORY = "128G"
+	GOLR_LOADER_MEMORY = "192G"
 	GOLR_INPUT_ONTOLOGIES = [
 	    "http://snapshot.geneontology.org/ontology/extensions/go-amigo.owl"
 	].join(" ")
@@ -250,7 +250,7 @@ pipeline {
 		    image 'geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master'
 		    // Reset Jenkins Docker agent default to original
 		    // root.
-		    args '-u root:root --mount type=tmpfs,destination=/srv/solr/data'
+		    args '-u root:root --mount type=tmpfs,destination=/srv/solr/data,tmpfs-size=700000000000'
 		}
 	    }
 
@@ -266,7 +266,12 @@ pipeline {
 		sh 'echo \'nameserver 8.8.8.8\' > /etc/resolv.conf'
 		sh 'echo \'search lbl.gov\' >> /etc/resolv.conf'
 
+		// WARNING: MEGAHACK
+		// See attempts around: https://github.com/geneontology/pipeline/issues/407#issuecomment-2513461418
+		//sh 'cat /tmp/run-indexer.sh | sed "s/--solr-optimize//" > /tmp/run-indexer-no-opt.sh'
+
 		// Build index into tmpfs.
+		//sh 'bash /tmp/run-indexer-no-opt.sh'
 		sh 'bash /tmp/run-indexer.sh'
 
 		// Immediately check to see if it looks like we have
