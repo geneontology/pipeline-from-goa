@@ -271,7 +271,7 @@ pipeline {
 		// Remove optimize.
 		sh 'cat /tmp/run-indexer.sh | sed "s/--solr-optimize//" > /tmp/run-indexer-no-opt.sh'
 		// Bump jetty timeout from 30s to 5m.
-		sh 'cat /etc/default/jetty9 | sed "s/Xmx3g/Xmx16g\ \-Djetty.timeout=300000/" > /tmp/jetty9'
+		sh 'cat /etc/default/jetty9 | sed "s/Xmx3g/Xmx16g -Djetty.timeout=300000/" > /tmp/jetty9'
 		sh 'mv /tmp/jetty9 /etc/default/jetty9'
 
 		// Build index into tmpfs.
