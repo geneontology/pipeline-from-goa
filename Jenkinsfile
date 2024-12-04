@@ -273,6 +273,9 @@ pipeline {
 		// Bump jetty timeout from 30s to 5m.
 		sh 'cat /etc/default/jetty9 | sed "s/Xmx3g/Xmx16g -Djetty.timeout=300000/" > /tmp/jetty9.tmp'
 		sh 'mv /tmp/jetty9.tmp /etc/default/jetty9'
+		// ^ mem up, but uneffective for timeout.
+		sh 'cat /etc/jetty9/start.ini | sed "s/http.timeout=300000/http.timeout=3000000/" > /tmp/start.ini.tmp'
+		sh 'mv /tmp/start.ini.tmp /etc/jetty9/start.ini'
 
 		// Build index into tmpfs.
 		sh 'bash /tmp/run-indexer-no-opt.sh'
@@ -345,6 +348,9 @@ pipeline {
 			}
 		    }
 		}
+		// See if sleeping a little gives the tmpfs a little
+		// time to catch up.
+		sleep time: 1, unit: 'MINUTES'
 	    }
 	}
 
