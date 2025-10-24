@@ -222,8 +222,8 @@ pipeline {
 		    dir('./go-site') {
 			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
 
-			//sh 'apt-get update'
-			//sh 'apt-get -y install '
+			sh 'DEBIAN_FRONTEND=noninteractive apt-get update'
+			sh 'DEBIAN_FRONTEND=noninteractive apt-get -y install python3'
 
 			sh 'ls -AlF'
 			sh 'python3 scripts/download_goex_data.py /tmp/goex'
