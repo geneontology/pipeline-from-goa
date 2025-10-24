@@ -225,6 +225,7 @@ pipeline {
 			//sh 'apt-get update'
 			//sh 'apt-get -y install '
 
+			sh 'ls -AlF'
 			sh 'python3 scripts/download_goex_data.py /tmp/goex'
 			sh 'ls -AlF /tmp/goex'
 			sh 'python3 scripts/partition_and_merge_gaf.py /tmp/goex /tmp/merged union 5'
