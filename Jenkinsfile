@@ -218,6 +218,9 @@ pipeline {
 	    }
 	    steps {
 		script {
+		    // WARNING: MEGAHACK
+		    sh 'echo \'nameserver 8.8.8.8\' > /etc/resolv.conf'
+		    sh 'echo \'search lbl.gov\' >> /etc/resolv.conf'
 
 		    dir('./go-site') {
 			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
