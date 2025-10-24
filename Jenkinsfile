@@ -115,10 +115,11 @@ pipeline {
 	].join(" ")
 	// WARNING: hard-coded for the moment.
 	GOLR_INPUT_GAFS = [
-	    "http://skyhook.berkeleybop.org/confinement-for-pipeline-388/union1.gaf.gz",
-	    "http://skyhook.berkeleybop.org/confinement-for-pipeline-388/union2.gaf.gz",
-	    "http://skyhook.berkeleybop.org/confinement-for-pipeline-388/union3.gaf.gz",
-	    "http://skyhook.berkeleybop.org/confinement-for-pipeline-388/union4.gaf.gz"
+	    "http://skyhook.geneontology.io/pipeline-from-goa/main/union_1.gaf.gz",
+	    "http://skyhook.geneontology.io/pipeline-from-goa/main/union_2.gaf.gz",
+	    "http://skyhook.geneontology.io/pipeline-from-goa/main/union_3.gaf.gz",
+	    "http://skyhook.geneontology.io/pipeline-from-goa/main/union_4.gaf.gz",
+	    "http://skyhook.geneontology.io/pipeline-from-goa/main/union_5.gaf.gz"
 	].join(" ")
 	GOLR_INPUT_PANTHER_TREES = [
 	    "http://snapshot.geneontology.org/products/panther/arbre.tgz"
@@ -208,6 +209,30 @@ pipeline {
 	    }
 	}
 
+	stage('TTL pathways package') {
+	    agent {
+		docker {
+		    image 'ubuntu:noble'
+		    args '-u root:root --mount type=tmpfs,destination=/tmp'
+		}
+	    }
+	    steps {
+		script {
+
+		    dir('./go-site') {
+			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
+
+			//sh 'apt-get update'
+			//sh 'apt-get -y install '
+
+			sh 'python3 scripts/download_goex_data.py /tmp/goex'
+			sh 'ls -AlF /tmp/goex'
+			sh 'python3 scripts/partition_and_merge_gaf.py /tmp/goex /tmp/merged union 5'
+			sh 'ls -AlF /tmp/merged'
+		    }
+		}
+	    }
+	}
 	// stage('TTL pathways package') {
 	//     steps {
 	// 	script {
@@ -246,116 +271,116 @@ pipeline {
 	//     }
 	// }
 
-	//...
-	stage('Produce derivatives (*)') {
-	    agent {
-		docker {
-		    image 'geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master'
-		    // Reset Jenkins Docker agent default to original
-		    // root.
-		    args '-u root:root --mount type=tmpfs,destination=/srv/solr/data'
-		}
-	    }
+	// //...
+	// stage('Produce derivatives (*)') {
+	//     agent {
+	// 	docker {
+	// 	    image 'geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master'
+	// 	    // Reset Jenkins Docker agent default to original
+	// 	    // root.
+	// 	    args '-u root:root --mount type=tmpfs,destination=/srv/solr/data'
+	// 	}
+	//     }
 
-	    // // CHECKPOINT: Recover key environmental variables.
-	    // environment {
-	    // 	START_DOW = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/dow.txt', , returnStdout: true).trim()
-	    // 	START_DATE = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/date.txt', , returnStdout: true).trim()
-	    // }
+	//     // // CHECKPOINT: Recover key environmental variables.
+	//     // environment {
+	//     // 	START_DOW = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/dow.txt', , returnStdout: true).trim()
+	//     // 	START_DATE = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/date.txt', , returnStdout: true).trim()
+	//     // }
 
-	    steps {
+	//     steps {
 
-		// WARNING: MEGAHACK
-		sh 'echo \'nameserver 8.8.8.8\' > /etc/resolv.conf'
-		sh 'echo \'search lbl.gov\' >> /etc/resolv.conf'
+	// 	// WARNING: MEGAHACK
+	// 	sh 'echo \'nameserver 8.8.8.8\' > /etc/resolv.conf'
+	// 	sh 'echo \'search lbl.gov\' >> /etc/resolv.conf'
 
-		// WARNING: MEGAHACK
-		// See attempts around: https://github.com/geneontology/pipeline/issues/407#issuecomment-2513461418
-		// Remove optimize.
-		sh 'cat /tmp/run-indexer.sh | sed "s/--solr-optimize//" > /tmp/run-indexer-no-opt.sh'
-		// Bump jetty timeout from 30s to 5m.
-		sh 'cat /etc/default/jetty9 | sed "s/Xmx3g/Xmx16g -Djetty.timeout=300000/" > /tmp/jetty9.tmp'
-		sh 'mv /tmp/jetty9.tmp /etc/default/jetty9'
-		// ^ mem up, but uneffective for timeout.
-		sh 'cat /etc/jetty9/start.ini | sed "s/http.timeout=300000/http.timeout=3000000/" > /tmp/start.ini.tmp'
-		sh 'mv /tmp/start.ini.tmp /etc/jetty9/start.ini'
+	// 	// WARNING: MEGAHACK
+	// 	// See attempts around: https://github.com/geneontology/pipeline/issues/407#issuecomment-2513461418
+	// 	// Remove optimize.
+	// 	sh 'cat /tmp/run-indexer.sh | sed "s/--solr-optimize//" > /tmp/run-indexer-no-opt.sh'
+	// 	// Bump jetty timeout from 30s to 5m.
+	// 	sh 'cat /etc/default/jetty9 | sed "s/Xmx3g/Xmx16g -Djetty.timeout=300000/" > /tmp/jetty9.tmp'
+	// 	sh 'mv /tmp/jetty9.tmp /etc/default/jetty9'
+	// 	// ^ mem up, but uneffective for timeout.
+	// 	sh 'cat /etc/jetty9/start.ini | sed "s/http.timeout=300000/http.timeout=3000000/" > /tmp/start.ini.tmp'
+	// 	sh 'mv /tmp/start.ini.tmp /etc/jetty9/start.ini'
 
-		// Build index into tmpfs.
-		sh 'bash /tmp/run-indexer-no-opt.sh'
-		//sh 'bash /tmp/run-indexer.sh'
+	// 	// Build index into tmpfs.
+	// 	sh 'bash /tmp/run-indexer-no-opt.sh'
+	// 	//sh 'bash /tmp/run-indexer.sh'
 
-		// Immediately check to see if it looks like we have
-		// enough docs when trying a
-		// release. SANITY_SOLR_DOC_COUNT_MIN must be greater
-		// than what we seen in the index.
-		script {
-		    if( env.BRANCH_NAME == 'release' ){
+	// 	// Immediately check to see if it looks like we have
+	// 	// enough docs when trying a
+	// 	// release. SANITY_SOLR_DOC_COUNT_MIN must be greater
+	// 	// than what we seen in the index.
+	// 	script {
+	// 	    if( env.BRANCH_NAME == 'release' ){
 
-			// Test overall.
-			echo "SANITY_SOLR_DOC_COUNT_MIN:${env.SANITY_SOLR_DOC_COUNT_MIN}"
-			sh 'curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json"'
-			sh 'if [ $SANITY_SOLR_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
+	// 		// Test overall.
+	// 		echo "SANITY_SOLR_DOC_COUNT_MIN:${env.SANITY_SOLR_DOC_COUNT_MIN}"
+	// 		sh 'curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json"'
+	// 		sh 'if [ $SANITY_SOLR_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
 
-			// Test bioentity.
-			echo "SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN:${env.SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN}"
-			sh 'curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity"'
-			sh 'if [ $SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
-		    }
-		}
+	// 		// Test bioentity.
+	// 		echo "SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN:${env.SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN}"
+	// 		sh 'curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity"'
+	// 		sh 'if [ $SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
+	// 	    }
+	// 	}
 
-		// Copy tmpfs Solr contents onto skyhook.
-		sh 'tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index .'
-		withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-		    // Copy over index.
-		    // Copy over log.
-		    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/golr-index-contents.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/'
-		    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/golr_timestamp.log skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/'
-		}
+	// 	// Copy tmpfs Solr contents onto skyhook.
+	// 	sh 'tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index .'
+	// 	withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+	// 	    // Copy over index.
+	// 	    // Copy over log.
+	// 	    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/golr-index-contents.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/'
+	// 	    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/golr_timestamp.log skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/'
+	// 	}
 
-		// Solr should still be running in the background here
-		// from indexing--create stats products from running
-		// GOlr.
-		// Prepare a working directory based around go-site.
-		dir('./go-stats') {
-		    git branch: TARGET_GO_STATS_BRANCH, url: 'https://github.com/geneontology/go-stats.git'
+	// 	// Solr should still be running in the background here
+	// 	// from indexing--create stats products from running
+	// 	// GOlr.
+	// 	// Prepare a working directory based around go-site.
+	// 	dir('./go-stats') {
+	// 	    git branch: TARGET_GO_STATS_BRANCH, url: 'https://github.com/geneontology/go-stats.git'
 
-		    // Not much want or need here--simple
-		    // python3. However, using the information hidden
-		    // in run-indexer.sh to know where the Solr
-		    // instance is hiding.
-		    sh 'mkdir -p /tmp/stats/ || true'
-		    sh 'cp ./libraries/go-stats/*.py /tmp'
-		    // Needed as extra library.
-		    sh 'pip3 install --force-reinstall requests==2.19.1'
-		    sh 'pip3 install --force-reinstall networkx==2.2'
+	// 	    // Not much want or need here--simple
+	// 	    // python3. However, using the information hidden
+	// 	    // in run-indexer.sh to know where the Solr
+	// 	    // instance is hiding.
+	// 	    sh 'mkdir -p /tmp/stats/ || true'
+	// 	    sh 'cp ./libraries/go-stats/*.py /tmp'
+	// 	    // Needed as extra library.
+	// 	    sh 'pip3 install --force-reinstall requests==2.19.1'
+	// 	    sh 'pip3 install --force-reinstall networkx==2.2'
 
-		    // Final command, sealed into docker work
-		    // environment.
-		    echo "Check that results have been stored properly"
-		    sh "curl 'http://localhost:8080/solr/select?q=*:*&rows=0'"
-		    echo "End of results"
-		    retry(3){
-			sh 'python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d $START_DATE'
-		    }
-		    retry(3) {
-		    	sh 'wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json'
-		    }
+	// 	    // Final command, sealed into docker work
+	// 	    // environment.
+	// 	    echo "Check that results have been stored properly"
+	// 	    sh "curl 'http://localhost:8080/solr/select?q=*:*&rows=0'"
+	// 	    echo "End of results"
+	// 	    retry(3){
+	// 		sh 'python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d $START_DATE'
+	// 	    }
+	// 	    retry(3) {
+	// 	    	sh 'wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json'
+	// 	    }
 
-		    // Roll the stats forward.
-		    sh 'python3 /tmp/aggregate-stats.py -a aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json'
+	// 	    // Roll the stats forward.
+	// 	    sh 'python3 /tmp/aggregate-stats.py -a aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json'
 
-		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-		    	retry(3) {
-			    // Copy over stats files.
-			    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/stats/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/release_stats/'
-			}
-		    }
-		}
-		// See if sleeping a little gives the tmpfs a little
-		// time to catch up.
-		sleep time: 1, unit: 'MINUTES'
-	    }
-	}
+	// 	    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+	// 	    	retry(3) {
+	// 		    // Copy over stats files.
+	// 		    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/stats/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/release_stats/'
+	// 		}
+	// 	    }
+	// 	}
+	// 	// See if sleeping a little gives the tmpfs a little
+	// 	// time to catch up.
+	// 	sleep time: 1, unit: 'MINUTES'
+	//     }
+	// }
 
 	// //...
 	// stage('Sanity II') {
