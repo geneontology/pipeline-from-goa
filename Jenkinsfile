@@ -115,16 +115,26 @@ pipeline {
 	].join(" ")
 	// WARNING: hard-coded for the moment.
 	GOLR_INPUT_GAFS = [
-	    "https://skyhook.geneontology.io/pipeline-from-goa/main/union_1.gaf.gz",
-	    "https://skyhook.geneontology.io/pipeline-from-goa/main/union_2.gaf.gz",
-	    "https://skyhook.geneontology.io/pipeline-from-goa/main/union_3.gaf.gz",
-	    "https://skyhook.geneontology.io/pipeline-from-goa/main/union_4.gaf.gz",
-	    "https://skyhook.geneontology.io/pipeline-from-goa/main/union_5.gaf.gz",
-	    "https://skyhook.geneontology.io/pipeline-from-goa/main/union_6.gaf.gz",
-	    "https://skyhook.geneontology.io/pipeline-from-goa/main/union_7.gaf.gz",
-	    "https://skyhook.geneontology.io/pipeline-from-goa/main/union_8.gaf.gz",
-	    "https://skyhook.geneontology.io/pipeline-from-goa/main/union_9.gaf.gz",
-	    "https://skyhook.geneontology.io/pipeline-from-goa/main/union_10.gaf.gz"
+	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_1.gaf.gz",
+	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_2.gaf.gz",
+	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_3.gaf.gz",
+	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_4.gaf.gz",
+	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_5.gaf.gz",
+	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_6.gaf.gz",
+	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_7.gaf.gz",
+	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_8.gaf.gz",
+	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_9.gaf.gz",
+	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_10.gaf.gz"
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_1.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_2.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_3.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_4.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_5.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_6.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_7.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_8.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_9.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_10.gaf.gz'
 	].join(" ")
 	GOLR_INPUT_PANTHER_TREES = [
 	    "http://snapshot.geneontology.org/products/panther/arbre.tgz"
