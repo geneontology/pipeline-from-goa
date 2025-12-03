@@ -125,16 +125,16 @@ pipeline {
 	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_8.gaf.gz",
 	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_9.gaf.gz",
 	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_10.gaf.gz"
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_1.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_2.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_3.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_4.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_5.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_6.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_7.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_8.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_9.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology.io/merged_10.gaf.gz'
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_1.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_2.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_3.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_4.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_5.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_6.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_7.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_8.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_9.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_10.gaf.gz'
 	].join(" ")
 	GOLR_INPUT_PANTHER_TREES = [
 	    "http://snapshot.geneontology.org/products/panther/arbre.tgz"
@@ -224,7 +224,21 @@ pipeline {
 	    }
 	}
 
-	stage('TTL pathways package') {
+	stage('Ontology download') {
+	    steps {
+		script {
+		    // Get the ontology.
+		    sh 'wget -w 5 -r -np -nH -e robots=off --user-agent="GOC Pipeline" -d --reject="README*,index.html*,robots.txt,Makefile*" https://ftp.ebi.ac.uk/pub/contrib/goa/goex/current/ontology/'
+
+		    // Copy to skyhook for record.
+		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+			sh 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./pub/contrib/goa/goex/current/ontology/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/ontology/'
+		    }
+		}
+	    }
+	}
+
+	stage('Annotation download and partition') {
 	    agent {
 		docker {
 		    image 'ubuntu:noble'
@@ -243,16 +257,30 @@ pipeline {
 			sh 'DEBIAN_FRONTEND=noninteractive apt-get update'
 			sh 'DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-yaml openssh-client'
 
+			// Download annotations.
 			sh 'ls -AlF'
 			sh 'python3 scripts/download_goex_data.py /tmp/goex'
+
+			// Copy to skyhook for record.
+			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+			    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/goex/*.gaf.gz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/annotations/'
+			}
+
+			// Partition.
 			sh 'ls -AlF /tmp/goex'
 			sh 'python3 scripts/partition_and_merge_gaf.py /tmp/goex /tmp/merged union 10'
 			sh 'ls -AlF /tmp/merged'
 
 			// Copy tmpfs contents to somewhere we can get
 			// at it.
+			// However, we are having some trouble accessing...
 			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-			    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/merged/union* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/'
+			    sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/merged/union* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/TEMP/'
+			}
+			// ...From above, push copy out to S3.
+			withCredentials([file(credentialsId: 'aws_go_push_json', variable: 'S3_PUSH_JSON'), file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON'), string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'), string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
+			    // NOTE: Put out to S3 for now?
+
 			}
 		    }
 		}
@@ -404,7 +432,7 @@ pipeline {
 		}
 		// See if sleeping a little gives the tmpfs a little
 		// time to catch up.
-		sleep time: 1, unit: 'MINUTES'
+		sleep time: 2, unit: 'MINUTES'
 	    }
 	}
 
@@ -922,6 +950,7 @@ void initialize() {
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/ontology || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/release_stats || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/TEMP || true'
 	// Tag the top to let the world know I was at least
 	// here.
 	sh 'echo "Runtime summary." > $WORKSPACE/mnt/$JOB_NAME/summary.txt'
