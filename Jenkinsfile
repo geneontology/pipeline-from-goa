@@ -227,8 +227,12 @@ pipeline {
 	stage('Ontology download') {
 	    steps {
 		script {
-		    // Get the ontology.
-		    sh 'wget --wait 5 --recursive --no-parent --no-host-directories --execute robots=off --span-hosts=off --user-agent="GOC Pipeline" --debug --reject="index.html*,*.tmp,README*,*.html,*.htm,robots.txt,Makefile*,*wikipedia*" https://ftp.ebi.ac.uk/pub/contrib/goa/goex/current/ontology/'
+		    try {
+			// Get the ontology.
+			sh 'wget --wait 5 --recursive --no-parent --no-host-directories --execute robots=off --span-hosts=off --user-agent="GOC Pipeline" --debug --reject="index.html*,*.tmp,README*,*.html,*.htm,robots.txt,Makefile*,*wikipedia*" https://ftp.ebi.ac.uk/pub/contrib/goa/goex/current/ontology/'
+		    } catch (exception) {
+			echo "There has been a recursion/download failure; accepting that this was likely fine, but check contents."
+		    }
 
 		    // Copy to skyhook for record.
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
