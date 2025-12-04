@@ -125,16 +125,16 @@ pipeline {
 	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_8.gaf.gz",
 	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_9.gaf.gz",
 	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_10.gaf.gz"
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_1.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_2.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_3.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_4.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_5.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_6.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_7.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_8.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_9.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/merged_10.gaf.gz'
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_1.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_2.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_3.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_4.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_5.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_6.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_7.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_8.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_9.gaf.gz',
+	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_10.gaf.gz'
 	].join(" ")
 	GOLR_INPUT_PANTHER_TREES = [
 	    "http://snapshot.geneontology.org/products/panther/arbre.tgz"
@@ -280,7 +280,8 @@ pipeline {
 			// ...From above, push copy out to S3.
 			withCredentials([file(credentialsId: 'aws_go_push_json', variable: 'S3_PUSH_JSON'), file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON'), string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'), string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
 			    // NOTE: Put out to S3 for now?
-
+			    sh 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y -u install s3cmd'
+			    sh 's3cmd -c $S3CMD_JSON --acl-public put /tmp/merged/union* s3://go-public/skyhook-geneontology-io/'
 			}
 		    }
 		}
