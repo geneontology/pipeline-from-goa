@@ -228,7 +228,7 @@ pipeline {
 	    steps {
 		script {
 		    // Get the ontology.
-		    sh 'wget -w 5 -r -np -nH -e robots=off --user-agent="GOC Pipeline" -d --reject="README*,index.html*,robots.txt,Makefile*" https://ftp.ebi.ac.uk/pub/contrib/goa/goex/current/ontology/'
+		    sh 'wget --wait 5 --recursive --no-parent --no-host-directories --execute robots=off --user-agent="GOC Pipeline" --debug --reject="README*,*.html,*.htm,robots.txt,Makefile*" https://ftp.ebi.ac.uk/pub/contrib/goa/goex/current/ontology/'
 
 		    // Copy to skyhook for record.
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
