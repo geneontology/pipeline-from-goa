@@ -30,6 +30,13 @@ pipeline {
 	TARGET_ROBOT_BRANCH = 'master'
 	// The branch of noctua-models to use.
 	TARGET_NOCTUA_MODELS_BRANCH = 'master'
+	// The branch of gocam-py to use.
+	TARGET_GOCAM_PY_BRANCH = 'main'
+	// URL to the Minerva JSON models tarball (input for gocam-py).
+	// This tarball is produced by an earlier pipeline step and made
+	// available at a URL (e.g. on S3 or skyhook HTTP).
+	// WARNING: TBD -- set to actual URL once upstream pipeline is determined.
+	MINERVA_JSON_TARBALL_URL = 'https://current.geneontology.org/products/json/noctua-models-json.tgz'
 	// The people to call when things go bad. It is a comma-space
 	// "separated" string.
 	// TARGET_ADMIN_EMAILS = 'sjcarbon@lbl.gov,debert@usc.edu,smoxon@lbl.gov'
@@ -438,6 +445,98 @@ pipeline {
 		// See if sleeping a little gives the tmpfs a little
 		// time to catch up.
 		sleep time: 2, unit: 'MINUTES'
+	    }
+	}
+
+	stage('GO-CAM processing') {
+	    agent {
+		docker {
+		    image 'ubuntu:noble'
+		    args '-u root:root --mount type=tmpfs,destination=/tmp'
+		}
+	    }
+	    steps {
+		script {
+		    // WARNING: MEGAHACK
+		    sh 'echo \'nameserver 8.8.8.8\' > /etc/resolv.conf'
+		    sh 'echo \'search lbl.gov\' >> /etc/resolv.conf'
+
+		    // Install system dependencies.
+		    sh 'DEBIAN_FRONTEND=noninteractive apt-get update'
+		    sh 'DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-pip python3-venv git openssh-client wget'
+
+		    // Install uv (not available in Ubuntu apt repos).
+		    sh 'pip3 install --break-system-packages uv'
+
+		    // Clone gocam-py and install its dependencies.
+		    // Pipeline scripts are NOT included in the pip package,
+		    // so we must clone the repo and run from there.
+		    dir('./gocam-py') {
+			git branch: TARGET_GOCAM_PY_BRANCH, url: 'https://github.com/geneontology/gocam-py.git'
+			sh 'uv sync --all-extras'
+		    }
+
+		    // Set up working directory structure.
+		    sh 'mkdir -p /tmp/gocam-work/input'
+		    sh 'mkdir -p /tmp/gocam-work/01-gocam-models'
+		    sh 'mkdir -p /tmp/gocam-work/02-true-gocams'
+		    sh 'mkdir -p /tmp/gocam-work/02-pseudo-gocams'
+		    sh 'mkdir -p /tmp/gocam-work/03-indexed-true-gocams'
+		    sh 'mkdir -p /tmp/gocam-work/04-index-files'
+		    sh 'mkdir -p /tmp/gocam-work/05-browser-search-docs'
+		    sh 'mkdir -p /tmp/gocam-work/reports'
+
+		    // Download and extract Minerva JSON tarball.
+		    sh 'wget -q -O /tmp/gocam-work/minerva-models.tar.gz $MINERVA_JSON_TARBALL_URL'
+		    sh 'tar -xzf /tmp/gocam-work/minerva-models.tar.gz -C /tmp/gocam-work/input'
+
+		    // Download released GO ontology and GOC groups
+		    // metadata from current.geneontology.org for use
+		    // in step 3 (indexing).
+		    sh 'wget -q -O /tmp/gocam-work/go.obo https://current.geneontology.org/ontology/go.obo'
+		    sh 'wget -q -O /tmp/gocam-work/groups.yaml https://current.geneontology.org/metadata/groups.yaml'
+
+		    // Run pipeline scripts sequentially from gocam-py repo.
+		    dir('./gocam-py') {
+
+			// Step 1: Convert Minerva models to GO-CAM models.
+			sh 'uv run python pipeline/convert_minerva_models_to_gocam_models.py --input-dir /tmp/gocam-work/input --output-dir /tmp/gocam-work/01-gocam-models --report-file /tmp/gocam-work/reports/01-convert.json --verbose'
+
+			// Step 2: Filter true GO-CAM models from pseudo GO-CAMs.
+			sh 'uv run python pipeline/filter_true_gocam_models.py --input-dir /tmp/gocam-work/01-gocam-models --output-dir /tmp/gocam-work/02-true-gocams --pseudo-dir /tmp/gocam-work/02-pseudo-gocams --report-file /tmp/gocam-work/reports/02-filter.json --verbose'
+
+			// Step 3: Add query index (OAK lookups) to models.
+			// Uses released GO ontology via pronto adapter.
+			// NCBITaxon is not a GO product, so it still
+			// auto-downloads from OBO Foundry (sqlite:obo:ncbitaxon).
+			sh 'uv run python pipeline/add_query_index_to_models.py --input-dir /tmp/gocam-work/02-true-gocams --output-dir /tmp/gocam-work/03-indexed-true-gocams --report-file /tmp/gocam-work/reports/03-index.json --go-adapter-descriptor "pronto:/tmp/gocam-work/go.obo" --goc-groups-yaml /tmp/gocam-work/groups.yaml --verbose'
+
+			// Step 4: Generate index files (~6 JSON files).
+			sh 'uv run python pipeline/generate_index_files.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/04-index-files --report-file /tmp/gocam-work/reports/04-index-files.json --verbose'
+
+			// Step 5: Generate GO-CAM Browser search docs (1 JSON file).
+			sh 'uv run python pipeline/generate_go_cam_browser_search_docs.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/05-browser-search-docs --report-file /tmp/gocam-work/reports/05-browser-search.json --verbose'
+		    }
+
+		    // Upload release artifacts to skyhook.
+		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+			retry(3) {
+			    sh 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/gocam-work/02-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/'
+			}
+			retry(3) {
+			    sh 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/gocam-work/03-indexed-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/'
+			}
+			retry(3) {
+			    sh 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/gocam-work/04-index-files skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/'
+			}
+			retry(3) {
+			    sh 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/gocam-work/05-browser-search-docs skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/'
+			}
+			retry(3) {
+			    sh 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/gocam-work/reports skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/'
+			}
+		    }
+		}
 	    }
 	}
 
@@ -950,6 +1049,7 @@ void initialize() {
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/solr || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/panther || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/gaferencer || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/go-cam || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/metadata || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/annotations || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/ontology || true'
