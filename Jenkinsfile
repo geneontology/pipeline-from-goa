@@ -253,7 +253,7 @@ pipeline {
 	    agent {
 		docker {
 		    image 'ubuntu:noble'
-		    args '-u root:root --mount type=tmpfs,destination=/tmp'
+		    args '-u root:root --init --mount type=tmpfs,destination=/tmp'
 		}
 	    }
 	    steps {
@@ -344,7 +344,7 @@ pipeline {
 		    image 'geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master'
 		    // Reset Jenkins Docker agent default to original
 		    // root.
-		    args '-u root:root --mount type=tmpfs,destination=/srv/solr/data'
+		    args '-u root:root --init --mount type=tmpfs,destination=/srv/solr/data'
 		}
 	    }
 
@@ -452,7 +452,7 @@ pipeline {
 	    agent {
 		docker {
 		    image 'ubuntu:noble'
-		    args '-u root:root --mount type=tmpfs,destination=/tmp'
+		    args '-u root:root --init --mount type=tmpfs,destination=/tmp'
 		}
 	    }
 	    steps {
