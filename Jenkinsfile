@@ -293,8 +293,8 @@ pipeline {
 
 			// Copy to skyhook for record.
 			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-			    sh 'chmod a+r "$SKYHOOK_IDENTITY"'
-			    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/goex/*.gaf.gz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/annotations/"'
+			    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
+			    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/goex/*.gaf.gz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/annotations/"'
 			}
 
 			// Partition.
@@ -306,8 +306,8 @@ pipeline {
 			// at it.
 			// However, we are having some trouble accessing...
 			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-			    sh 'chmod a+r "$SKYHOOK_IDENTITY"'
-			    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/merged/union* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/TEMP/"'
+			    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
+			    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/merged/union* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/TEMP/"'
 			}
 			// ...From above, push copy out to S3.
 			withCredentials([file(credentialsId: 'aws_go_push_json', variable: 'S3_PUSH_JSON'), file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON'), string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'), string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
@@ -438,11 +438,11 @@ pipeline {
 		// Copy tmpfs Solr contents onto skyhook.
 		sh 'su jenkins --preserve-environment -c "tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index ."'
 		withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-		    sh 'chmod a+r "$SKYHOOK_IDENTITY"'
+		    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
 		    // Copy over index.
 		    // Copy over log.
-		    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/golr-index-contents.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
-		    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/golr_timestamp.log skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
+		    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr-index-contents.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
+		    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr_timestamp.log skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
 		}
 
 		// Solr should still be running in the background here
@@ -477,10 +477,10 @@ pipeline {
 		    sh 'su jenkins --preserve-environment -c "python3 /tmp/aggregate-stats.py -a aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json"'
 
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-			sh 'chmod a+r "$SKYHOOK_IDENTITY"'
+			sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
 		    	retry(3) {
 			    // Copy over stats files.
-			    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/stats/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/release_stats/"'
+			    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/stats/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/release_stats/"'
 			}
 		    }
 		}
@@ -576,21 +576,21 @@ pipeline {
 
 		    // Upload release artifacts to skyhook.
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-			sh 'chmod a+r "$SKYHOOK_IDENTITY"'
+			sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
 			retry(3) {
-			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/gocam-work/02-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
+			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/02-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
 			}
 			retry(3) {
-			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/gocam-work/03-indexed-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
+			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/03-indexed-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
 			}
 			retry(3) {
-			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/gocam-work/04-index-files skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
+			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/04-index-files skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
 			}
 			retry(3) {
-			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/gocam-work/05-browser-search-docs skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
+			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/05-browser-search-docs skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
 			}
 			retry(3) {
-			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY /tmp/gocam-work/reports skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
+			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/reports skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
 			}
 		    }
 
