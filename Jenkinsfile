@@ -288,33 +288,33 @@ pipeline {
 			sh 'chown -R jenkins:jenkins .'
 
 			// Download annotations.
-			sh 'su jenkins --preserve-environment -c "ls -AlF"'
-			sh 'su jenkins --preserve-environment -c "python3 scripts/download_goex_data.py /tmp/goex"'
+			sh 'su jenkins -c "ls -AlF"'
+			sh 'su jenkins -c "python3 scripts/download_goex_data.py /tmp/goex"'
 
 			// Copy to skyhook for record.
 			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
 			    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
-			    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/goex/*.gaf.gz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/annotations/"'
+			    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/goex/*.gaf.gz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/annotations/"'
 			}
 
 			// Partition.
-			sh 'su jenkins --preserve-environment -c "ls -AlF /tmp/goex"'
-			sh 'su jenkins --preserve-environment -c "python3 scripts/partition_and_merge_gaf.py /tmp/goex /tmp/merged union 10"'
-			sh 'su jenkins --preserve-environment -c "ls -AlF /tmp/merged"'
+			sh 'su jenkins -c "ls -AlF /tmp/goex"'
+			sh 'su jenkins -c "python3 scripts/partition_and_merge_gaf.py /tmp/goex /tmp/merged union 10"'
+			sh 'su jenkins -c "ls -AlF /tmp/merged"'
 
 			// Copy tmpfs contents to somewhere we can get
 			// at it.
 			// However, we are having some trouble accessing...
 			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
 			    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
-			    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/merged/union* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/TEMP/"'
+			    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/merged/union* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/TEMP/"'
 			}
 			// ...From above, push copy out to S3.
 			withCredentials([file(credentialsId: 'aws_go_push_json', variable: 'S3_PUSH_JSON'), file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON'), string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'), string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
 			    // NOTE: Put out to S3 for now?
 			    sh 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y -u install s3cmd'
 			    sh 'chmod a+r "$S3CMD_JSON"'
-			    sh 'su jenkins --preserve-environment -c "s3cmd -c $S3CMD_JSON --acl-public put /tmp/merged/union* s3://go-public/skyhook-geneontology-io/"'
+			    sh 'su jenkins -c "s3cmd -c $S3CMD_JSON --acl-public put /tmp/merged/union* s3://go-public/skyhook-geneontology-io/"'
 			}
 		    }
 
@@ -425,24 +425,24 @@ pipeline {
 
 			// Test overall.
 			echo "SANITY_SOLR_DOC_COUNT_MIN:${env.SANITY_SOLR_DOC_COUNT_MIN}"
-			sh 'su jenkins --preserve-environment -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0&wt=json\\""'
+			sh 'su jenkins -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0&wt=json\\""'
 			sh 'if [ $SANITY_SOLR_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
 
 			// Test bioentity.
 			echo "SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN:${env.SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN}"
-			sh 'su jenkins --preserve-environment -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity\\""'
+			sh 'su jenkins -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity\\""'
 			sh 'if [ $SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
 		    }
 		}
 
 		// Copy tmpfs Solr contents onto skyhook.
-		sh 'su jenkins --preserve-environment -c "tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index ."'
+		sh 'su jenkins -c "tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index ."'
 		withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
 		    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
 		    // Copy over index.
 		    // Copy over log.
-		    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr-index-contents.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
-		    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr_timestamp.log skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
+		    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr-index-contents.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
+		    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr_timestamp.log skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
 		}
 
 		// Solr should still be running in the background here
@@ -459,28 +459,28 @@ pipeline {
 		    // instance is hiding.
 		    sh 'mkdir -p /tmp/stats/'
 		    sh 'chown jenkins:jenkins /tmp/stats'
-		    sh 'su jenkins --preserve-environment -c "cp ./libraries/go-stats/*.py /tmp"'
+		    sh 'su jenkins -c "cp ./libraries/go-stats/*.py /tmp"'
 
 		    // Final command, sealed into docker work
 		    // environment.
 		    echo "Check that results have been stored properly"
-		    sh 'su jenkins --preserve-environment -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0\\""'
+		    sh 'su jenkins -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0\\""'
 		    echo "End of results"
 		    retry(3){
-			sh 'su jenkins --preserve-environment -c "python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d $START_DATE"'
+			sh 'su jenkins -c "python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d $START_DATE"'
 		    }
 		    retry(3) {
-		    	sh 'su jenkins --preserve-environment -c "wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json"'
+		    	sh 'su jenkins -c "wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json"'
 		    }
 
 		    // Roll the stats forward.
-		    sh 'su jenkins --preserve-environment -c "python3 /tmp/aggregate-stats.py -a aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json"'
+		    sh 'su jenkins -c "python3 /tmp/aggregate-stats.py -a aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json"'
 
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
 			sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
 		    	retry(3) {
 			    // Copy over stats files.
-			    sh 'su jenkins --preserve-environment -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/stats/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/release_stats/"'
+			    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/stats/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/release_stats/"'
 			}
 		    }
 		}
@@ -528,69 +528,69 @@ pipeline {
 			sh 'chown -R jenkins:jenkins .'
 			// Mark repo safe for git; needed because
 			// uv-dynamic-versioning uses git.
-			sh 'su jenkins --preserve-environment -c "git config --global --add safe.directory \\"$PWD\\""'
-			sh 'su jenkins --preserve-environment -c "uv sync --all-extras"'
+			sh 'su jenkins -c "git config --global --add safe.directory \\"$PWD\\""'
+			sh 'su jenkins -c "uv sync --all-extras"'
 		    }
 
 		    // Set up working directory structure.
-		    sh 'su jenkins --preserve-environment -c "mkdir -p /tmp/gocam-work/input"'
-		    sh 'su jenkins --preserve-environment -c "mkdir -p /tmp/gocam-work/01-gocam-models"'
-		    sh 'su jenkins --preserve-environment -c "mkdir -p /tmp/gocam-work/02-true-gocams"'
-		    sh 'su jenkins --preserve-environment -c "mkdir -p /tmp/gocam-work/02-pseudo-gocams"'
-		    sh 'su jenkins --preserve-environment -c "mkdir -p /tmp/gocam-work/03-indexed-true-gocams"'
-		    sh 'su jenkins --preserve-environment -c "mkdir -p /tmp/gocam-work/04-index-files"'
-		    sh 'su jenkins --preserve-environment -c "mkdir -p /tmp/gocam-work/05-browser-search-docs"'
-		    sh 'su jenkins --preserve-environment -c "mkdir -p /tmp/gocam-work/reports"'
+		    sh 'su jenkins -c "mkdir -p /tmp/gocam-work/input"'
+		    sh 'su jenkins -c "mkdir -p /tmp/gocam-work/01-gocam-models"'
+		    sh 'su jenkins -c "mkdir -p /tmp/gocam-work/02-true-gocams"'
+		    sh 'su jenkins -c "mkdir -p /tmp/gocam-work/02-pseudo-gocams"'
+		    sh 'su jenkins -c "mkdir -p /tmp/gocam-work/03-indexed-true-gocams"'
+		    sh 'su jenkins -c "mkdir -p /tmp/gocam-work/04-index-files"'
+		    sh 'su jenkins -c "mkdir -p /tmp/gocam-work/05-browser-search-docs"'
+		    sh 'su jenkins -c "mkdir -p /tmp/gocam-work/reports"'
 
 		    // Download and extract Minerva JSON tarball.
-		    sh 'su jenkins --preserve-environment -c "wget -q -O /tmp/gocam-work/minerva-models.tar.gz $MINERVA_JSON_TARBALL_URL"'
-		    sh 'su jenkins --preserve-environment -c "tar -xzf /tmp/gocam-work/minerva-models.tar.gz -C /tmp/gocam-work/input"'
+		    sh 'su jenkins -c "wget -q -O /tmp/gocam-work/minerva-models.tar.gz $MINERVA_JSON_TARBALL_URL"'
+		    sh 'su jenkins -c "tar -xzf /tmp/gocam-work/minerva-models.tar.gz -C /tmp/gocam-work/input"'
 
 		    // Download released GO ontology and GOC groups
 		    // metadata from current.geneontology.org for use
 		    // in step 3 (indexing).
-		    sh 'su jenkins --preserve-environment -c "wget -q -O /tmp/gocam-work/go.obo https://current.geneontology.org/ontology/go.obo"'
-		    sh 'su jenkins --preserve-environment -c "wget -q -O /tmp/gocam-work/groups.yaml https://current.geneontology.org/metadata/groups.yaml"'
+		    sh 'su jenkins -c "wget -q -O /tmp/gocam-work/go.obo https://current.geneontology.org/ontology/go.obo"'
+		    sh 'su jenkins -c "wget -q -O /tmp/gocam-work/groups.yaml https://current.geneontology.org/metadata/groups.yaml"'
 
 		    // Run pipeline scripts sequentially from gocam-py repo.
 		    dir('./gocam-py') {
 
 			// Step 1: Convert Minerva models to GO-CAM models.
-			sh 'su jenkins --preserve-environment -c "uv run python pipeline/convert_minerva_models_to_gocam_models.py --input-dir /tmp/gocam-work/input --output-dir /tmp/gocam-work/01-gocam-models --report-file /tmp/gocam-work/reports/01-convert.json --verbose"'
+			sh 'su jenkins -c "uv run python pipeline/convert_minerva_models_to_gocam_models.py --input-dir /tmp/gocam-work/input --output-dir /tmp/gocam-work/01-gocam-models --report-file /tmp/gocam-work/reports/01-convert.json --verbose"'
 
 			// Step 2: Filter true GO-CAM models from pseudo GO-CAMs.
-			sh 'su jenkins --preserve-environment -c "uv run python pipeline/filter_true_gocam_models.py --input-dir /tmp/gocam-work/01-gocam-models --output-dir /tmp/gocam-work/02-true-gocams --pseudo-dir /tmp/gocam-work/02-pseudo-gocams --report-file /tmp/gocam-work/reports/02-filter.json --verbose"'
+			sh 'su jenkins -c "uv run python pipeline/filter_true_gocam_models.py --input-dir /tmp/gocam-work/01-gocam-models --output-dir /tmp/gocam-work/02-true-gocams --pseudo-dir /tmp/gocam-work/02-pseudo-gocams --report-file /tmp/gocam-work/reports/02-filter.json --verbose"'
 
 			// Step 3: Add query index (OAK lookups) to models.
 			// Uses released GO ontology via pronto adapter.
 			// NCBITaxon is not a GO product, so it still
 			// auto-downloads from OBO Foundry (sqlite:obo:ncbitaxon).
-			sh 'su jenkins --preserve-environment -c "uv run python pipeline/add_query_index_to_models.py --input-dir /tmp/gocam-work/02-true-gocams --output-dir /tmp/gocam-work/03-indexed-true-gocams --report-file /tmp/gocam-work/reports/03-index.json --go-adapter-descriptor \\"pronto:/tmp/gocam-work/go.obo\\" --goc-groups-yaml /tmp/gocam-work/groups.yaml --verbose"'
+			sh 'su jenkins -c "uv run python pipeline/add_query_index_to_models.py --input-dir /tmp/gocam-work/02-true-gocams --output-dir /tmp/gocam-work/03-indexed-true-gocams --report-file /tmp/gocam-work/reports/03-index.json --go-adapter-descriptor \\"pronto:/tmp/gocam-work/go.obo\\" --goc-groups-yaml /tmp/gocam-work/groups.yaml --verbose"'
 
 			// Step 4: Generate index files (~6 JSON files).
-			sh 'su jenkins --preserve-environment -c "uv run python pipeline/generate_index_files.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/04-index-files --report-file /tmp/gocam-work/reports/04-index-files.json --verbose"'
+			sh 'su jenkins -c "uv run python pipeline/generate_index_files.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/04-index-files --report-file /tmp/gocam-work/reports/04-index-files.json --verbose"'
 
 			// Step 5: Generate GO-CAM Browser search docs (1 JSON file).
-			sh 'su jenkins --preserve-environment -c "uv run python pipeline/generate_go_cam_browser_search_docs.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/05-browser-search-docs --report-file /tmp/gocam-work/reports/05-browser-search.json --verbose"'
+			sh 'su jenkins -c "uv run python pipeline/generate_go_cam_browser_search_docs.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/05-browser-search-docs --report-file /tmp/gocam-work/reports/05-browser-search.json --verbose"'
 		    }
 
 		    // Upload release artifacts to skyhook.
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
 			sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
 			retry(3) {
-			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/02-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
+			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/02-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
 			}
 			retry(3) {
-			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/03-indexed-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
+			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/03-indexed-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
 			}
 			retry(3) {
-			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/04-index-files skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
+			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/04-index-files skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
 			}
 			retry(3) {
-			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/05-browser-search-docs skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
+			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/05-browser-search-docs skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
 			}
 			retry(3) {
-			    sh 'su jenkins --preserve-environment -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/reports skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
+			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/reports skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam/"'
 			}
 		    }
 
