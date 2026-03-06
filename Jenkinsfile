@@ -508,7 +508,7 @@ pipeline {
 
 		    // Install system dependencies.
 		    sh 'DEBIAN_FRONTEND=noninteractive apt-get update'
-		    sh 'DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-pip python3-venv git openssh-client wget'
+		    sh 'DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-pip python3-venv git openssh-client wget graphviz libgraphviz-dev'
 
 		    // Install uv (not available in Ubuntu apt repos).
 		    sh 'pip3 install --break-system-packages uv'
