@@ -559,7 +559,7 @@ pipeline {
 			sh 'su jenkins -c "uv run python pipeline/convert_minerva_models_to_gocam_models.py --input-dir /tmp/gocam-work/input --output-dir /tmp/gocam-work/01-gocam-models --report-file /tmp/gocam-work/reports/01-convert.json --verbose"'
 
 			// Step 2: Filter true GO-CAM models from pseudo GO-CAMs.
-			sh 'su jenkins -c "uv run python pipeline/filter_true_gocam_models.py --input-dir /tmp/gocam-work/01-gocam-models --output-dir /tmp/gocam-work/02-true-gocams --pseudo-dir /tmp/gocam-work/02-pseudo-gocams --report-file /tmp/gocam-work/reports/02-filter.json --verbose"'
+			sh 'su jenkins -c "uv run python pipeline/filter_true_gocam_models.py --input-dir /tmp/gocam-work/01-gocam-models --output-dir /tmp/gocam-work/02-true-gocams --pseudo-gocam-output-dir /tmp/gocam-work/02-pseudo-gocams --report-file /tmp/gocam-work/reports/02-filter.json --verbose"'
 
 			// Step 3: Add query index (OAK lookups) to models.
 			// Uses released GO ontology via pronto adapter.
