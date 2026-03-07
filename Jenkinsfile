@@ -242,89 +242,87 @@ pipeline {
 	    }
 	}
 
-	// TEMPORARILY COMMENTED OUT for faster iteration on GO-CAM stage.
-	// stage('Ontology download') {
-	//     steps {
-	// 	script {
-	// 	    try {
-	// 		// Get the ontology.
-	// 		sh 'wget --wait 5 --recursive --no-parent --no-host-directories --execute robots=off --span-hosts=off --user-agent="GOC Pipeline" --debug --reject="index.html*,*.tmp,README*,*.html,*.htm,robots.txt,Makefile*,*wikipedia*" https://ftp.ebi.ac.uk/pub/contrib/goa/goex/current/ontology/'
-	// 	    } catch (exception) {
-	// 		echo "There has been a recursion/download failure; accepting that this was likely fine, but check contents."
-	// 	    }
+	stage('Ontology download') {
+	    steps {
+		script {
+		    try {
+			// Get the ontology.
+			sh 'wget --wait 5 --recursive --no-parent --no-host-directories --execute robots=off --span-hosts=off --user-agent="GOC Pipeline" --debug --reject="index.html*,*.tmp,README*,*.html,*.htm,robots.txt,Makefile*,*wikipedia*" https://ftp.ebi.ac.uk/pub/contrib/goa/goex/current/ontology/'
+		    } catch (exception) {
+			echo "There has been a recursion/download failure; accepting that this was likely fine, but check contents."
+		    }
 
-	// 	    // Copy to skyhook for record.
-	// 	    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-	// 		sh 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./pub/contrib/goa/goex/current/ontology/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/ontology/'
-	// 	    }
-	// 	}
-	//     }
-	// }
+		    // Copy to skyhook for record.
+		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+			sh 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./pub/contrib/goa/goex/current/ontology/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/ontology/'
+		    }
+		}
+	    }
+	}
 
-	// TEMPORARILY COMMENTED OUT for faster iteration on GO-CAM stage.
-	// stage('Annotation download and partition') {
-	//     agent {
-	// 	docker {
-	// 	    image 'ubuntu:noble'
-	// 	    args '-u root:root --init --mount type=tmpfs,destination=/tmp'
-	// 	}
-	//     }
-	//     steps {
-	// 	script {
-	// 	    // WARNING: MEGAHACK
-	// 	    sh 'echo \'nameserver 8.8.8.8\' > /etc/resolv.conf'
-	// 	    sh 'echo \'search lbl.gov\' >> /etc/resolv.conf'
+	stage('Annotation download and partition') {
+	    agent {
+		docker {
+		    image 'ubuntu:noble'
+		    args '-u root:root --init --mount type=tmpfs,destination=/tmp'
+		}
+	    }
+	    steps {
+		script {
+		    // WARNING: MEGAHACK
+		    sh 'echo \'nameserver 8.8.8.8\' > /etc/resolv.conf'
+		    sh 'echo \'search lbl.gov\' >> /etc/resolv.conf'
 
-	// 	    sh 'DEBIAN_FRONTEND=noninteractive apt-get update'
-	// 	    sh 'DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-yaml openssh-client'
+		    sh 'DEBIAN_FRONTEND=noninteractive apt-get update'
+		    sh 'DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-yaml openssh-client'
 
-	// 	    // Create jenkins user matching host UID/GID.
-	// 	    sh "groupadd -g $JENKINS_GID jenkins || true"
-	// 	    sh "useradd -u $JENKINS_UID -g $JENKINS_GID -m -s /bin/bash jenkins"
-	// 	    // Fix workspace and tmpfs ownership.
-	// 	    sh 'chown -R jenkins:jenkins "$WORKSPACE"'
-	// 	    sh 'chown jenkins:jenkins /tmp'
+		    // Create jenkins user matching host UID/GID.
+		    sh "groupadd -g $JENKINS_GID jenkins || true"
+		    sh "useradd -u $JENKINS_UID -g $JENKINS_GID -m -s /bin/bash jenkins"
+		    // Fix workspace and tmpfs ownership.
+		    sh 'chown -R jenkins:jenkins "$WORKSPACE"'
+		    sh 'chown jenkins:jenkins /tmp'
 
-	// 	    dir('./go-site') {
-	// 		git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
-	// 		sh 'chown -R jenkins:jenkins .'
+		    dir('./go-site') {
+			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
+			sh 'chown -R jenkins:jenkins .'
 
-	// 		// Download annotations.
-	// 		sh 'su jenkins -c "ls -AlF"'
-	// 		sh 'su jenkins -c "python3 scripts/download_goex_data.py /tmp/goex"'
+			// Download annotations.
+			sh 'su jenkins -c "ls -AlF"'
+			sh 'su jenkins -c "python3 scripts/download_goex_data.py /tmp/goex"'
 
-	// 		// Copy to skyhook for record.
-	// 		withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-	// 		    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
-	// 		    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/goex/*.gaf.gz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/annotations/"'
-	// 		}
+			// Copy to skyhook for record.
+			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+			    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
+			    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/goex/*.gaf.gz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/annotations/"'
+			}
 
-	// 		// Partition.
-	// 		sh 'su jenkins -c "ls -AlF /tmp/goex"'
-	// 		sh 'su jenkins -c "python3 scripts/partition_and_merge_gaf.py /tmp/goex /tmp/merged union 10"'
-	// 		sh 'su jenkins -c "ls -AlF /tmp/merged"'
+			// Partition.
+			sh 'su jenkins -c "ls -AlF /tmp/goex"'
+			sh 'su jenkins -c "python3 scripts/partition_and_merge_gaf.py /tmp/goex /tmp/merged union 10"'
+			sh 'su jenkins -c "ls -AlF /tmp/merged"'
 
-	// 		// Copy tmpfs contents to somewhere we can get
-	// 		// at it.
-	// 		// However, we are having some trouble accessing...
-	// 		withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-	// 		    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
-	// 		    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/merged/union* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/TEMP/"'
-	// 		}
-	// 		// ...From above, push copy out to S3.
-	// 		withCredentials([file(credentialsId: 'aws_go_push_json', variable: 'S3_PUSH_JSON'), file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON'), string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'), string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
-	// 		    // NOTE: Put out to S3 for now?
-	// 		    sh 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y -u install s3cmd'
-	// 		    sh 'chmod a+r "$S3CMD_JSON"'
-	// 		    sh 'su jenkins -c "s3cmd -c $S3CMD_JSON --acl-public put /tmp/merged/union* s3://go-public/skyhook-geneontology-io/"'
-	// 		}
-	// 	    }
+			// Copy tmpfs contents to somewhere we can get
+			// at it.
+			// However, we are having some trouble accessing...
+			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+			    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
+			    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/merged/union* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/TEMP/"'
+			}
+			// ...From above, push copy out to S3.
+			withCredentials([file(credentialsId: 'aws_go_push_json', variable: 'S3_PUSH_JSON'), file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON'), string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'), string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
+			    // NOTE: Put out to S3 for now?
+			    sh 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y -u install s3cmd'
+			    sh 'chmod a+r "$S3CMD_JSON"'
+			    sh 'su jenkins -c "s3cmd -c $S3CMD_JSON --acl-public put /tmp/merged/union* s3://go-public/skyhook-geneontology-io/"'
+			}
+		    }
 
-	// 	    // Fix ownership so jenkins user can clean up.
-	// 	    sh 'chown -R $JENKINS_UID:$JENKINS_GID "$WORKSPACE" || true'
-	// 	}
-	//     }
-	// }
+		    // Fix ownership so jenkins user can clean up.
+		    sh 'chown -R $JENKINS_UID:$JENKINS_GID "$WORKSPACE" || true'
+		}
+	    }
+	}
 
 	// stage('TTL pathways package') {
 	//     steps {
@@ -364,137 +362,136 @@ pipeline {
 	//     }
 	// }
 
-	// TEMPORARILY COMMENTED OUT for faster iteration on GO-CAM stage.
 	//...
-	// stage('Produce derivatives (*)') {
-	//     agent {
-	// 	docker {
-	// 	    image 'geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master'
-	// 	    // Reset Jenkins Docker agent default to original
-	// 	    // root.
-	// 	    args '-u root:root --init --mount type=tmpfs,destination=/srv/solr/data'
-	// 	}
-	//     }
+	stage('Produce derivatives (*)') {
+	    agent {
+		docker {
+		    image 'geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master'
+		    // Reset Jenkins Docker agent default to original
+		    // root.
+		    args '-u root:root --init --mount type=tmpfs,destination=/srv/solr/data'
+		}
+	    }
 
-	//     // // CHECKPOINT: Recover key environmental variables.
-	//     // environment {
-	//     // 	START_DOW = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/dow.txt', , returnStdout: true).trim()
-	//     // 	START_DATE = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/date.txt', , returnStdout: true).trim()
-	//     // }
+	    // // CHECKPOINT: Recover key environmental variables.
+	    // environment {
+	    // 	START_DOW = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/dow.txt', , returnStdout: true).trim()
+	    // 	START_DATE = sh(script: 'curl https://skyhook.geneontology.io/pipeline-from-goa/main/metadata/date.txt', , returnStdout: true).trim()
+	    // }
 
-	//     steps {
+	    steps {
 
-	// 	// WARNING: MEGAHACK
-	// 	sh 'echo \'nameserver 8.8.8.8\' > /etc/resolv.conf'
-	// 	sh 'echo \'search lbl.gov\' >> /etc/resolv.conf'
+		// WARNING: MEGAHACK
+		sh 'echo \'nameserver 8.8.8.8\' > /etc/resolv.conf'
+		sh 'echo \'search lbl.gov\' >> /etc/resolv.conf'
 
-	// 	// WARNING: MEGAHACK
-	// 	// See attempts around: https://github.com/geneontology/pipeline/issues/407#issuecomment-2513461418
-	// 	// Remove optimize.
-	// 	sh 'cat /tmp/run-indexer.sh | sed "s/--solr-optimize//" > /tmp/run-indexer-no-opt.sh'
-	// 	// Bump jetty timeout from 30s to 5m.
-	// 	sh 'cat /etc/default/jetty9 | sed "s/Xmx3g/Xmx16g -Djetty.timeout=300000/" > /tmp/jetty9.tmp'
-	// 	sh 'mv /tmp/jetty9.tmp /etc/default/jetty9'
-	// 	// ^ mem up, but uneffective for timeout.
-	// 	sh 'cat /etc/jetty9/start.ini | sed "s/http.timeout=300000/http.timeout=3000000/" > /tmp/start.ini.tmp'
-	// 	sh 'mv /tmp/start.ini.tmp /etc/jetty9/start.ini'
+		// WARNING: MEGAHACK
+		// See attempts around: https://github.com/geneontology/pipeline/issues/407#issuecomment-2513461418
+		// Remove optimize.
+		sh 'cat /tmp/run-indexer.sh | sed "s/--solr-optimize//" > /tmp/run-indexer-no-opt.sh'
+		// Bump jetty timeout from 30s to 5m.
+		sh 'cat /etc/default/jetty9 | sed "s/Xmx3g/Xmx16g -Djetty.timeout=300000/" > /tmp/jetty9.tmp'
+		sh 'mv /tmp/jetty9.tmp /etc/default/jetty9'
+		// ^ mem up, but uneffective for timeout.
+		sh 'cat /etc/jetty9/start.ini | sed "s/http.timeout=300000/http.timeout=3000000/" > /tmp/start.ini.tmp'
+		sh 'mv /tmp/start.ini.tmp /etc/jetty9/start.ini'
 
-	// 	// Install pip dependencies as root (before
-	// 	// dropping privileges) since they go into system
-	// 	// site-packages.
-	// 	sh 'pip3 install --force-reinstall requests==2.19.1'
-	// 	sh 'pip3 install --force-reinstall networkx==2.2'
+		// Install pip dependencies as root (before
+		// dropping privileges) since they go into system
+		// site-packages.
+		sh 'pip3 install --force-reinstall requests==2.19.1'
+		sh 'pip3 install --force-reinstall networkx==2.2'
 
-	// 	// Create jenkins user matching host UID/GID.
-	// 	sh "groupadd -g $JENKINS_GID jenkins || true"
-	// 	sh "useradd -u $JENKINS_UID -g $JENKINS_GID -m -s /bin/bash jenkins"
+		// Create jenkins user matching host UID/GID.
+		sh "groupadd -g $JENKINS_GID jenkins || true"
+		sh "useradd -u $JENKINS_UID -g $JENKINS_GID -m -s /bin/bash jenkins"
 
-	// 	// Build index into tmpfs (stays as root for
-	// 	// Solr/Jetty service management).
-	// 	sh 'bash /tmp/run-indexer-no-opt.sh'
-	// 	//sh 'bash /tmp/run-indexer.sh'
+		// Build index into tmpfs (stays as root for
+		// Solr/Jetty service management).
+		sh 'bash /tmp/run-indexer-no-opt.sh'
+		//sh 'bash /tmp/run-indexer.sh'
 
-	// 	// After indexer completes, fix ownership for
-	// 	// jenkins user.
-	// 	sh 'chown -R jenkins:jenkins "$WORKSPACE"'
-	// 	sh 'chmod -R a+r /srv/solr/data'
+		// After indexer completes, fix ownership for
+		// jenkins user.
+		sh 'chown -R jenkins:jenkins "$WORKSPACE"'
+		sh 'chmod -R a+r /srv/solr/data'
 
-	// 	// Immediately check to see if it looks like we have
-	// 	// enough docs when trying a
-	// 	// release. SANITY_SOLR_DOC_COUNT_MIN must be greater
-	// 	// than what we seen in the index.
-	// 	script {
-	// 	    if( env.BRANCH_NAME == 'release' ){
+		// Immediately check to see if it looks like we have
+		// enough docs when trying a
+		// release. SANITY_SOLR_DOC_COUNT_MIN must be greater
+		// than what we seen in the index.
+		script {
+		    if( env.BRANCH_NAME == 'release' ){
 
-	// 		// Test overall.
-	// 		echo "SANITY_SOLR_DOC_COUNT_MIN:${env.SANITY_SOLR_DOC_COUNT_MIN}"
-	// 		sh 'su jenkins -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0&wt=json\\""'
-	// 		sh 'if [ $SANITY_SOLR_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
+			// Test overall.
+			echo "SANITY_SOLR_DOC_COUNT_MIN:${env.SANITY_SOLR_DOC_COUNT_MIN}"
+			sh 'su jenkins -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0&wt=json\\""'
+			sh 'if [ $SANITY_SOLR_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
 
-	// 		// Test bioentity.
-	// 		echo "SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN:${env.SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN}"
-	// 		sh 'su jenkins -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity\\""'
-	// 		sh 'if [ $SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
-	// 	    }
-	// 	}
+			// Test bioentity.
+			echo "SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN:${env.SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN}"
+			sh 'su jenkins -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity\\""'
+			sh 'if [ $SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN -gt $(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity" | grep -oh \'"numFound":[[:digit:]]*\' | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi'
+		    }
+		}
 
-	// 	// Copy tmpfs Solr contents onto skyhook.
-	// 	sh 'su jenkins -c "tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index ."'
-	// 	withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-	// 	    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
-	// 	    // Copy over index.
-	// 	    // Copy over log.
-	// 	    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr-index-contents.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
-	// 	    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr_timestamp.log skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
-	// 	}
+		// Copy tmpfs Solr contents onto skyhook.
+		sh 'su jenkins -c "tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index ."'
+		withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+		    sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
+		    // Copy over index.
+		    // Copy over log.
+		    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr-index-contents.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
+		    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr_timestamp.log skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"'
+		}
 
-	// 	// Solr should still be running in the background here
-	// 	// from indexing--create stats products from running
-	// 	// GOlr.
-	// 	// Prepare a working directory based around go-site.
-	// 	dir('./go-stats') {
-	// 	    git branch: TARGET_GO_STATS_BRANCH, url: 'https://github.com/geneontology/go-stats.git'
-	// 	    sh 'chown -R jenkins:jenkins .'
+		// Solr should still be running in the background here
+		// from indexing--create stats products from running
+		// GOlr.
+		// Prepare a working directory based around go-site.
+		dir('./go-stats') {
+		    git branch: TARGET_GO_STATS_BRANCH, url: 'https://github.com/geneontology/go-stats.git'
+		    sh 'chown -R jenkins:jenkins .'
 
-	// 	    // Not much want or need here--simple
-	// 	    // python3. However, using the information hidden
-	// 	    // in run-indexer.sh to know where the Solr
-	// 	    // instance is hiding.
-	// 	    sh 'mkdir -p /tmp/stats/'
-	// 	    sh 'chown jenkins:jenkins /tmp/stats'
-	// 	    sh 'su jenkins -c "cp ./libraries/go-stats/*.py /tmp"'
+		    // Not much want or need here--simple
+		    // python3. However, using the information hidden
+		    // in run-indexer.sh to know where the Solr
+		    // instance is hiding.
+		    sh 'mkdir -p /tmp/stats/'
+		    sh 'chown jenkins:jenkins /tmp/stats'
+		    sh 'su jenkins -c "cp ./libraries/go-stats/*.py /tmp"'
 
-	// 	    // Final command, sealed into docker work
-	// 	    // environment.
-	// 	    echo "Check that results have been stored properly"
-	// 	    sh 'su jenkins -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0\\""'
-	// 	    echo "End of results"
-	// 	    retry(3){
-	// 		sh 'su jenkins -c "python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d $START_DATE"'
-	// 	    }
-	// 	    retry(3) {
-	// 	    	sh 'su jenkins -c "wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json"'
-	// 	    }
+		    // Final command, sealed into docker work
+		    // environment.
+		    echo "Check that results have been stored properly"
+		    sh 'su jenkins -c "curl \\"http://localhost:8080/solr/select?q=*:*&rows=0\\""'
+		    echo "End of results"
+		    retry(3){
+			sh 'su jenkins -c "python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d $START_DATE"'
+		    }
+		    retry(3) {
+		    	sh 'su jenkins -c "wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json"'
+		    }
 
-	// 	    // Roll the stats forward.
-	// 	    sh 'su jenkins -c "python3 /tmp/aggregate-stats.py -a aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json"'
+		    // Roll the stats forward.
+		    sh 'su jenkins -c "python3 /tmp/aggregate-stats.py -a aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json"'
 
-	// 	    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-	// 		sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
-	// 	    	retry(3) {
-	// 		    // Copy over stats files.
-	// 		    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/stats/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/release_stats/"'
-	// 		}
-	// 	    }
-	// 	}
-	// 	// See if sleeping a little gives the tmpfs a little
-	// 	// time to catch up.
-	// 	sleep time: 2, unit: 'MINUTES'
+		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+			sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
+		    	retry(3) {
+			    // Copy over stats files.
+			    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/stats/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/release_stats/"'
+			}
+		    }
+		}
+		// See if sleeping a little gives the tmpfs a little
+		// time to catch up.
+		sleep time: 2, unit: 'MINUTES'
 
-	// 	// Fix ownership so jenkins user can clean up.
-	// 	sh 'chown -R $JENKINS_UID:$JENKINS_GID "$WORKSPACE" || true'
-	//     }
-	// }
+		// Fix ownership so jenkins user can clean up.
+		sh 'chown -R $JENKINS_UID:$JENKINS_GID "$WORKSPACE" || true'
+	    }
+	}
 
 	stage('GO-CAM processing') {
 	    agent {
