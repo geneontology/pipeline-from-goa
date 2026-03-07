@@ -574,7 +574,7 @@ pipeline {
 			sh 'su jenkins -c "uv run python pipeline/generate_index_files.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/04-index-files --report-file /tmp/gocam-work/reports/04-index-files.json --verbose"'
 
 			// Step 5: Generate GO-CAM Browser search docs (1 JSON file).
-			sh 'su jenkins -c "uv run python pipeline/generate_go_cam_browser_search_docs.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output /tmp/gocam-work/05-browser-search-docs --report-file /tmp/gocam-work/reports/05-browser-search.json --verbose"'
+			sh 'su jenkins -c "uv run python pipeline/generate_go_cam_browser_search_docs.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json --report-file /tmp/gocam-work/reports/05-browser-search.json --verbose"'
 		    }
 
 		    // Upload release artifacts to skyhook.
