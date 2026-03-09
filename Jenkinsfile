@@ -579,15 +579,15 @@ pipeline {
 			sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
 			// go-cam/json/ (GO-CAM model JSON files)
 			retry(3) {
-			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/02-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/go-cam/json"'
+			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/02-true-gocams/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/go-cam/json/"'
 			}
 			// products/indexed-go-cams/ (enriched models with query index)
 			retry(3) {
-			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/03-indexed-true-gocams skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/indexed-go-cams"'
+			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/03-indexed-true-gocams/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/indexed-go-cams/"'
 			}
 			// go-cam/index-json/ (aggregate index/summary files)
 			retry(3) {
-			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/04-index-files skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/go-cam/index-json"'
+			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/04-index-files/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/go-cam/index-json/"'
 			}
 			// products/go-cam-search/ (browser search docs)
 			retry(3) {
