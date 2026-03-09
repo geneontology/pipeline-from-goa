@@ -1101,10 +1101,6 @@ void initialize() {
 	// times past.
 	sh 'rm -r -f $WORKSPACE/mnt/$JOB_NAME || true'
 	// Rebuild directory structure.
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/bin || true'
-	// WARNING/BUG: needed for arachne to run at
-	// this point.
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/lib || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/ttl || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/json || true'
