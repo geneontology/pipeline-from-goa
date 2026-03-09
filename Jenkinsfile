@@ -577,17 +577,17 @@ pipeline {
 		    // Upload release artifacts to skyhook.
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
 			sh 'cp "$SKYHOOK_IDENTITY" /home/jenkins/.skyhook_key && chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'
-			// go-cam/json/ (GO-CAM model JSON files)
+			// go-cams/json/ (GO-CAM model JSON files)
 			retry(3) {
-			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/02-true-gocams/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/go-cam/json/"'
+			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/02-true-gocams/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/go-cams/json/"'
 			}
 			// products/indexed-go-cams/ (enriched models with query index)
 			retry(3) {
 			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/03-indexed-true-gocams/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/indexed-go-cams/"'
 			}
-			// go-cam/index-json/ (aggregate index/summary files)
+			// go-cams/index-json/ (aggregate index/summary files)
 			retry(3) {
-			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/04-index-files/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/go-cam/index-json/"'
+			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/04-index-files/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/go-cams/index-json/"'
 			}
 			// products/go-cam-search/ (browser search docs)
 			retry(3) {
@@ -1116,8 +1116,8 @@ void initialize() {
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/gaferencer || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/indexed-go-cams || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/go-cam-search || true'
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/go-cam/json || true'
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/go-cam/index-json || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/go-cams/json || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/go-cams/index-json || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports/go-cam || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/metadata || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/annotations || true'
