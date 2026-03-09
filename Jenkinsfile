@@ -593,9 +593,9 @@ pipeline {
 			retry(3) {
 			    sh 'su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam-search/"'
 			}
-			// go-cam/reports/ (pipeline reports)
+			// reports/go-cam/ (pipeline reports)
 			retry(3) {
-			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/reports skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/go-cam/reports"'
+			    sh 'su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/reports/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/reports/go-cam/"'
 			}
 		    }
 
@@ -1118,7 +1118,7 @@ void initialize() {
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/go-cam-search || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/go-cam/json || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/go-cam/index-json || true'
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/go-cam/reports || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports/go-cam || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/metadata || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/annotations || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/ontology || true'
