@@ -605,6 +605,70 @@ pipeline {
 	    }
 	}
 
+	stage('QC reports download') {
+	    steps {
+		script {
+		    try {
+			// Get GOEx QC reports (gorule reports per
+			// annotation group).
+			sh 'wget --wait 5 --recursive --no-parent --no-host-directories --execute robots=off --span-hosts=off --user-agent="GOC Pipeline" --debug --reject="index.html*,*.tmp,robots.txt" https://ftp.ebi.ac.uk/pub/contrib/goa/goex/current/qc_reports/'
+		    } catch (exception) {
+			echo "There has been a recursion/download failure for QC reports; accepting that this was likely fine, but check contents."
+		    }
+
+		    // Copy to skyhook.
+		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+			sh 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./pub/contrib/goa/goex/current/qc_reports/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/reports/'
+		    }
+		}
+	    }
+	}
+
+	stage('Metadata and annotations README') {
+	    steps {
+		script {
+		    // Clone geneontology/metadata and copy to
+		    // skyhook. This replaces the old go-site
+		    // metadata directory copy.
+		    dir('./metadata-repo') {
+			git branch: 'main', url: 'https://github.com/geneontology/metadata.git'
+		    }
+
+		    // Download annotation README from go-site.
+		    sh 'wget -N https://raw.githubusercontent.com/geneontology/go-site/$TARGET_GO_SITE_BRANCH/static/pages/README-annotation-downloads.txt'
+
+		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+			sh 'rsync -avz --exclude=".git" -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" ./metadata-repo/ skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/metadata/'
+			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY README-annotation-downloads.txt skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/annotations/README.txt'
+		    }
+		}
+	    }
+	}
+
+	stage('PANTHER trees') {
+	    steps {
+		script {
+		    dir('./go-site') {
+			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
+
+			// Download PANTHER tree files and names.
+			sh "wget -N http://data.pantherdb.org/PANTHER${PANTHER_VERSION}/globals/tree_files.tar.gz"
+			sh "wget -N http://data.pantherdb.org/PANTHER${PANTHER_VERSION}/globals/names.tab"
+			sh 'tar -zxvf tree_files.tar.gz'
+
+			// Generate arbre files from PANTHER data.
+			sh 'python3 ./scripts/prepare-panther-arbre-directory.py -v --names names.tab --trees tree_files --output arbre'
+			sh 'tar --use-compress-program=pigz -cvf arbre.tgz -C arbre .'
+		    }
+
+		    // Copy to skyhook.
+		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./go-site/arbre.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/panther/'
+		    }
+		}
+	    }
+	}
+
 	// //...
 	// stage('Sanity II') {
 	//     when { anyOf { branch 'release' } }
@@ -1133,6 +1197,7 @@ void initialize() {
 	sh 'echo "Start date: $START_DATE" >> $WORKSPACE/mnt/$JOB_NAME/summary.txt'
 	sh 'echo "$START_DAY" > $WORKSPACE/mnt/$JOB_NAME/metadata/dow.txt'
 	sh 'echo "$START_DATE" > $WORKSPACE/mnt/$JOB_NAME/metadata/date.txt'
+	sh 'echo "{\"date\": \"$START_DATE\"}" > $WORKSPACE/mnt/$JOB_NAME/metadata/release-date.json'
 
 	sh 'echo "Official release date: metadata/release-date.json" >> $WORKSPACE/mnt/$JOB_NAME/summary.txt'
 	sh 'echo "Official Zenodo archive DOI: metadata/release-archive-doi.json" >> $WORKSPACE/mnt/$JOB_NAME/summary.txt'
