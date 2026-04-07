@@ -279,30 +279,30 @@ pipeline {
 			string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'),
 			string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')
 		    ]) {
-			sh '''
+			sh """
 			    docker run --rm \
 			      --init \
 			      --mount type=tmpfs,destination=/tmp \
 			      -u root:root \
-			      -v "$WORKSPACE":/workspace \
-			      -v "$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \
-			      -v "$S3CMD_JSON":/secrets/s3cmd.cfg:ro \
-			      -e SKYHOOK_MACHINE="$SKYHOOK_MACHINE" \
-			      -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-			      -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-			      -e JENKINS_UID="$JENKINS_UID" \
-			      -e JENKINS_GID="$JENKINS_GID" \
-			      ubuntu:noble bash -c '
+			      -v "\$WORKSPACE":/workspace \
+			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \
+			      -v "\$S3CMD_JSON":/secrets/s3cmd.cfg:ro \
+			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \
+			      -e AWS_ACCESS_KEY_ID="\$AWS_ACCESS_KEY_ID" \
+			      -e AWS_SECRET_ACCESS_KEY="\$AWS_SECRET_ACCESS_KEY" \
+			      -e JENKINS_UID="\$JENKINS_UID" \
+			      -e JENKINS_GID="\$JENKINS_GID" \
+			      ubuntu:noble bash -c "
 				# WARNING: MEGAHACK
-				echo "nameserver 8.8.8.8" > /etc/resolv.conf
-				echo "search lbl.gov" >> /etc/resolv.conf
+				echo 'nameserver 8.8.8.8' > /etc/resolv.conf
+				echo 'search lbl.gov' >> /etc/resolv.conf
 
 				DEBIAN_FRONTEND=noninteractive apt-get update
 				DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-yaml openssh-client s3cmd
 
 				# Create jenkins user matching host UID/GID.
-				groupadd -g $JENKINS_GID jenkins || true
-				useradd -u $JENKINS_UID -g $JENKINS_GID -m -s /bin/bash jenkins
+				groupadd -g \\\$JENKINS_GID jenkins || true
+				useradd -u \\\$JENKINS_UID -g \\\$JENKINS_GID -m -s /bin/bash jenkins
 				chown -R jenkins:jenkins /workspace
 				chown jenkins:jenkins /tmp
 
@@ -315,28 +315,28 @@ pipeline {
 				chown -R jenkins:jenkins .
 
 				# Download annotations.
-				su jenkins -c "ls -AlF"
-				su jenkins -c "python3 scripts/download_goex_data.py /tmp/goex"
+				su jenkins -c 'ls -AlF'
+				su jenkins -c 'python3 scripts/download_goex_data.py /tmp/goex'
 
 				# Copy to skyhook for record.
-				su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/goex/*.gaf.gz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/annotations/"
+				su jenkins -c 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/goex/*.gaf.gz skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/annotations/'
 
 				# Partition.
-				su jenkins -c "ls -AlF /tmp/goex"
-				su jenkins -c "python3 scripts/partition_and_merge_gaf.py /tmp/goex /tmp/merged union 10"
-				su jenkins -c "ls -AlF /tmp/merged"
+				su jenkins -c 'ls -AlF /tmp/goex'
+				su jenkins -c 'python3 scripts/partition_and_merge_gaf.py /tmp/goex /tmp/merged union 10'
+				su jenkins -c 'ls -AlF /tmp/merged'
 
 				# Copy merged files to skyhook.
-				su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/merged/union* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/TEMP/"
+				su jenkins -c 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/merged/union* skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/TEMP/'
 
 				# Push merged files to S3.
 				chmod a+r /secrets/s3cmd.cfg
-				su jenkins -c "s3cmd -c /secrets/s3cmd.cfg --acl-public put /tmp/merged/union* s3://go-public/skyhook-geneontology-io/"
+				su jenkins -c 's3cmd -c /secrets/s3cmd.cfg --acl-public put /tmp/merged/union* s3://go-public/skyhook-geneontology-io/'
 
 				# Fix ownership so jenkins user can clean up.
-				chown -R $JENKINS_UID:$JENKINS_GID /workspace || true
-			      '
-			'''
+				chown -R \\\$JENKINS_UID:\\\$JENKINS_GID /workspace || true
+			      "
+			"""
 		    }
 		}
 	    }
@@ -558,21 +558,21 @@ pipeline {
 			file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'),
 			string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')
 		    ]) {
-			sh '''
+			sh """
 			    docker run --rm \
 			      --init \
 			      --mount type=tmpfs,destination=/tmp \
 			      -u root:root \
-			      -v "$WORKSPACE":/workspace \
-			      -v "$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \
-			      -e SKYHOOK_MACHINE="$SKYHOOK_MACHINE" \
-			      -e JENKINS_UID="$JENKINS_UID" \
-			      -e JENKINS_GID="$JENKINS_GID" \
-			      -e MINERVA_JSON_TARBALL_URL="$MINERVA_JSON_TARBALL_URL" \
-			      ubuntu:noble bash -c '
+			      -v "\$WORKSPACE":/workspace \
+			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \
+			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \
+			      -e JENKINS_UID="\$JENKINS_UID" \
+			      -e JENKINS_GID="\$JENKINS_GID" \
+			      -e MINERVA_JSON_TARBALL_URL="\$MINERVA_JSON_TARBALL_URL" \
+			      ubuntu:noble bash -c "
 				# WARNING: MEGAHACK
-				echo "nameserver 8.8.8.8" > /etc/resolv.conf
-				echo "search lbl.gov" >> /etc/resolv.conf
+				echo 'nameserver 8.8.8.8' > /etc/resolv.conf
+				echo 'search lbl.gov' >> /etc/resolv.conf
 
 				# Install system dependencies.
 				DEBIAN_FRONTEND=noninteractive apt-get update
@@ -582,8 +582,8 @@ pipeline {
 				pip3 install --break-system-packages uv
 
 				# Create jenkins user matching host UID/GID.
-				groupadd -g $JENKINS_GID jenkins || true
-				useradd -u $JENKINS_UID -g $JENKINS_GID -m -s /bin/bash jenkins
+				groupadd -g \\\$JENKINS_GID jenkins || true
+				useradd -u \\\$JENKINS_UID -g \\\$JENKINS_GID -m -s /bin/bash jenkins
 				chown -R jenkins:jenkins /workspace
 				chown jenkins:jenkins /tmp
 
@@ -597,67 +597,67 @@ pipeline {
 				chown -R jenkins:jenkins .
 				# Mark repo safe for git; needed because
 				# uv-dynamic-versioning uses git.
-				su jenkins -c "git config --global --add safe.directory /workspace/gocam-py"
-				su jenkins -c "uv sync --all-extras"
+				su jenkins -c 'git config --global --add safe.directory /workspace/gocam-py'
+				su jenkins -c 'uv sync --all-extras'
 
 				# Set up working directory structure.
-				su jenkins -c "mkdir -p /tmp/gocam-work/input /tmp/gocam-work/01-gocam-models /tmp/gocam-work/02-true-gocams /tmp/gocam-work/02-pseudo-gocams /tmp/gocam-work/03-indexed-true-gocams /tmp/gocam-work/04-index-files /tmp/gocam-work/05-browser-search-docs /tmp/gocam-work/reports"
+				su jenkins -c 'mkdir -p /tmp/gocam-work/input /tmp/gocam-work/01-gocam-models /tmp/gocam-work/02-true-gocams /tmp/gocam-work/02-pseudo-gocams /tmp/gocam-work/03-indexed-true-gocams /tmp/gocam-work/04-index-files /tmp/gocam-work/05-browser-search-docs /tmp/gocam-work/reports'
 
 				# Download and extract Minerva JSON tarball.
-				su jenkins -c "wget -q -O /tmp/gocam-work/minerva-models.tar.gz $MINERVA_JSON_TARBALL_URL"
-				su jenkins -c "tar -xzf /tmp/gocam-work/minerva-models.tar.gz -C /tmp/gocam-work/input"
+				su jenkins -c 'wget -q -O /tmp/gocam-work/minerva-models.tar.gz '\\\$MINERVA_JSON_TARBALL_URL''
+				su jenkins -c 'tar -xzf /tmp/gocam-work/minerva-models.tar.gz -C /tmp/gocam-work/input'
 
 				# Download released GO ontology and GOC groups
 				# metadata from current.geneontology.org for use
 				# in step 3 (indexing).
-				su jenkins -c "wget -q -O /tmp/gocam-work/go.obo https://current.geneontology.org/ontology/go.obo"
-				su jenkins -c "wget -q -O /tmp/gocam-work/groups.yaml https://current.geneontology.org/metadata/groups.yaml"
+				su jenkins -c 'wget -q -O /tmp/gocam-work/go.obo https://current.geneontology.org/ontology/go.obo'
+				su jenkins -c 'wget -q -O /tmp/gocam-work/groups.yaml https://current.geneontology.org/metadata/groups.yaml'
 
 				# Step 1: Convert Minerva models to GO-CAM models.
-				su jenkins -c "uv run python pipeline/convert_minerva_models_to_gocam_models.py --input-dir /tmp/gocam-work/input --output-dir /tmp/gocam-work/01-gocam-models --report-file /tmp/gocam-work/reports/01-convert.json --verbose"
+				su jenkins -c 'uv run python pipeline/convert_minerva_models_to_gocam_models.py --input-dir /tmp/gocam-work/input --output-dir /tmp/gocam-work/01-gocam-models --report-file /tmp/gocam-work/reports/01-convert.json --verbose'
 
 				# Step 2: Filter true GO-CAM models from pseudo GO-CAMs.
-				su jenkins -c "uv run python pipeline/filter_true_gocam_models.py --input-dir /tmp/gocam-work/01-gocam-models --output-dir /tmp/gocam-work/02-true-gocams --pseudo-gocam-output-dir /tmp/gocam-work/02-pseudo-gocams --report-file /tmp/gocam-work/reports/02-filter.json --verbose"
+				su jenkins -c 'uv run python pipeline/filter_true_gocam_models.py --input-dir /tmp/gocam-work/01-gocam-models --output-dir /tmp/gocam-work/02-true-gocams --pseudo-gocam-output-dir /tmp/gocam-work/02-pseudo-gocams --report-file /tmp/gocam-work/reports/02-filter.json --verbose'
 
 				# Step 3: Add query index (OAK lookups) to models.
 				# Uses released GO ontology via pronto adapter.
 				# NCBITaxon is not a GO product, so it still
 				# auto-downloads from OBO Foundry (sqlite:obo:ncbitaxon).
-				su jenkins -c "uv run python pipeline/add_query_index_to_models.py --input-dir /tmp/gocam-work/02-true-gocams --output-dir /tmp/gocam-work/03-indexed-true-gocams --report-file /tmp/gocam-work/reports/03-index.json --go-adapter-descriptor pronto:/tmp/gocam-work/go.obo --goc-groups-yaml /tmp/gocam-work/groups.yaml --verbose"
+				su jenkins -c 'uv run python pipeline/add_query_index_to_models.py --input-dir /tmp/gocam-work/02-true-gocams --output-dir /tmp/gocam-work/03-indexed-true-gocams --report-file /tmp/gocam-work/reports/03-index.json --go-adapter-descriptor pronto:/tmp/gocam-work/go.obo --goc-groups-yaml /tmp/gocam-work/groups.yaml --verbose'
 
 				# Step 4: Generate index files (~6 JSON files).
-				su jenkins -c "uv run python pipeline/generate_index_files.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/04-index-files --report-file /tmp/gocam-work/reports/04-index-files.json --verbose"
+				su jenkins -c 'uv run python pipeline/generate_index_files.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/04-index-files --report-file /tmp/gocam-work/reports/04-index-files.json --verbose'
 
 				# Step 5: Generate GO-CAM Browser search docs (1 JSON file).
-				su jenkins -c "uv run python pipeline/generate_go_cam_browser_search_docs.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json --report-file /tmp/gocam-work/reports/05-browser-search.json --verbose"
+				su jenkins -c 'uv run python pipeline/generate_go_cam_browser_search_docs.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json --report-file /tmp/gocam-work/reports/05-browser-search.json --verbose'
 
 				# Upload release artifacts to skyhook
 				# with retry logic for each scp.
 				for i in 1 2 3; do
-				    su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/02-true-gocams/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/go-cams/json/" && break
+				    su jenkins -c 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/02-true-gocams/* skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/go-cams/json/' && break
 				    sleep 5
 				done
 				for i in 1 2 3; do
-				    su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/03-indexed-true-gocams/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/indexed-go-cams/" && break
+				    su jenkins -c 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/03-indexed-true-gocams/* skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/products/indexed-go-cams/' && break
 				    sleep 5
 				done
 				for i in 1 2 3; do
-				    su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/04-index-files/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/go-cams/index-json/" && break
+				    su jenkins -c 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/04-index-files/* skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/go-cams/index-json/' && break
 				    sleep 5
 				done
 				for i in 1 2 3; do
-				    su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/go-cam-search/" && break
+				    su jenkins -c 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/products/go-cam-search/' && break
 				    sleep 5
 				done
 				for i in 1 2 3; do
-				    su jenkins -c "scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/reports/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/reports/go-cam/" && break
+				    su jenkins -c 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/reports/* skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/reports/go-cam/' && break
 				    sleep 5
 				done
 
 				# Fix ownership so jenkins user can clean up.
-				chown -R $JENKINS_UID:$JENKINS_GID /workspace || true
-			      '
-			'''
+				chown -R \\\$JENKINS_UID:\\\$JENKINS_GID /workspace || true
+			      "
+			"""
 		    }
 		}
 	    }
