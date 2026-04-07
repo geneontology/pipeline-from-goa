@@ -42,6 +42,47 @@ docker → container shell) is a recurring source of subtle bugs.
 Always run `shellcheck scripts/*.sh` before committing. It's
 installed locally. Fix all warnings -- no exceptions.
 
+### The `su jenkins -c` pattern
+
+In-container scripts run inside ephemeral docker containers that
+start as root. The base images do not have a `jenkins` user; each
+script creates one with UID/GID matching the host's Jenkins agent
+user (passed in via `$JENKINS_UID`/`$JENKINS_GID` env vars), so that
+files written to the bind-mounted `/workspace` have correct
+ownership when viewed from the host.
+
+The pattern is intentional and required:
+
+1. **Start as root** -- needed for `apt-get install`, `pip install`,
+   modifying `/etc/`, `chown`, starting services like Jetty.
+2. **Create the jenkins user** with matching host UID/GID:
+   ```
+   groupadd -g "$JENKINS_GID" jenkins || true
+   useradd -u "$JENKINS_UID" -g "$JENKINS_GID" -m -s /bin/bash jenkins
+   chown -R jenkins:jenkins /workspace
+   ```
+3. **Set up the skyhook key** under `/home/jenkins/`, owned by jenkins,
+   mode 0600 (ssh requires this).
+4. **Drop privileges** for any work that produces files or uses ssh:
+   ```
+   su jenkins -c 'python3 some_script.py'
+   ```
+5. **Final ownership fix** at end of script (defensive, in case
+   anything slipped through as root):
+   ```
+   chown -R "$JENKINS_UID:$JENKINS_GID" /workspace || true
+   ```
+
+Do not skip the user creation and run everything as root. Even
+though `--rm` cleans up the container, the bind-mounted `/workspace`
+persists on the host and root-owned files there will break
+subsequent builds.
+
+`su jenkins -c '...'` is the chosen pattern despite being verbose.
+It is clear, well-known, and present in every base image. We do not
+swap it for `runuser`/`gosu`/`setpriv` -- consistency matters more
+than the small ergonomic wins.
+
 ### Iteration cost
 
 A full pipeline run takes several hours. To iterate on a script bug
