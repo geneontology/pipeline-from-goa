@@ -419,23 +419,28 @@ pipeline {
 			      -e START_DATE="\$START_DATE" \
 			      -e SANITY_SOLR_DOC_COUNT_MIN="\$SANITY_SOLR_DOC_COUNT_MIN" \
 			      -e SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN="\$SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN" \
+			      -e GOLR_INPUT_ONTOLOGIES="\$GOLR_INPUT_ONTOLOGIES" \
+			      -e GOLR_INPUT_GAFS="\$GOLR_INPUT_GAFS" \
+			      -e GOLR_INPUT_PANTHER_TREES="\$GOLR_INPUT_PANTHER_TREES" \
+			      -e GOLR_SOLR_MEMORY="\$GOLR_SOLR_MEMORY" \
+			      -e GOLR_LOADER_MEMORY="\$GOLR_LOADER_MEMORY" \
 			      geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master \
 			      tail -f /dev/null
 			"""
 
 			// WARNING: MEGAHACK
-			sh "docker exec ${containerName} bash -c 'echo \"nameserver 8.8.8.8\" > /etc/resolv.conf && echo \"search lbl.gov\" >> /etc/resolv.conf'"
+			sh "docker exec ${containerName} bash -c \"echo 'nameserver 8.8.8.8' > /etc/resolv.conf && echo 'search lbl.gov' >> /etc/resolv.conf\""
 
 			// WARNING: MEGAHACK
 			// See attempts around: https://github.com/geneontology/pipeline/issues/407#issuecomment-2513461418
 			// Remove optimize, bump jetty timeout.
-			sh """docker exec ${containerName} bash -c '
-			    cat /tmp/run-indexer.sh | sed "s/--solr-optimize//" > /tmp/run-indexer-no-opt.sh
-			    cat /etc/default/jetty9 | sed "s/Xmx3g/Xmx16g -Djetty.timeout=300000/" > /tmp/jetty9.tmp
-			    mv /tmp/jetty9.tmp /etc/default/jetty9
-			    cat /etc/jetty9/start.ini | sed "s/http.timeout=300000/http.timeout=3000000/" > /tmp/start.ini.tmp
-			    mv /tmp/start.ini.tmp /etc/jetty9/start.ini
-			'"""
+			sh """docker exec ${containerName} bash -c "
+			    cat /tmp/run-indexer.sh | sed 's/--solr-optimize//' > /tmp/run-indexer-no-opt.sh
+			    && cat /etc/default/jetty9 | sed 's/Xmx3g/Xmx16g -Djetty.timeout=300000/' > /tmp/jetty9.tmp
+			    && mv /tmp/jetty9.tmp /etc/default/jetty9
+			    && cat /etc/jetty9/start.ini | sed 's/http.timeout=300000/http.timeout=3000000/' > /tmp/start.ini.tmp
+			    && mv /tmp/start.ini.tmp /etc/jetty9/start.ini
+			\""""
 
 			// Install pip dependencies as root (before
 			// dropping privileges) since they go into
@@ -444,8 +449,8 @@ pipeline {
 			sh "docker exec ${containerName} pip3 install --force-reinstall networkx==2.2"
 
 			// Create jenkins user matching host UID/GID.
-			sh "docker exec ${containerName} bash -c 'groupadd -g \$JENKINS_GID jenkins || true'"
-			sh "docker exec ${containerName} bash -c 'useradd -u \$JENKINS_UID -g \$JENKINS_GID -m -s /bin/bash jenkins'"
+			sh "docker exec ${containerName} bash -c \"groupadd -g \\\$JENKINS_GID jenkins || true\""
+			sh "docker exec ${containerName} bash -c \"useradd -u \\\$JENKINS_UID -g \\\$JENKINS_GID -m -s /bin/bash jenkins\""
 
 			// Build index into tmpfs (stays as root for
 			// Solr/Jetty service management).
@@ -453,7 +458,7 @@ pipeline {
 
 			// After indexer completes, fix ownership for
 			// jenkins user.
-			sh "docker exec ${containerName} bash -c 'chown -R jenkins:jenkins /workspace && chmod -R a+r /srv/solr/data'"
+			sh "docker exec ${containerName} bash -c \"chown -R jenkins:jenkins /workspace && chmod -R a+r /srv/solr/data\""
 
 			// Immediately check to see if it looks like
 			// we have enough docs when trying a release.
@@ -461,57 +466,57 @@ pipeline {
 
 			    // Test overall.
 			    echo "SANITY_SOLR_DOC_COUNT_MIN:${env.SANITY_SOLR_DOC_COUNT_MIN}"
-			    sh "docker exec ${containerName} su jenkins -c 'curl \"http://localhost:8080/solr/select?q=*:*&rows=0&wt=json\"'"
-			    sh """docker exec ${containerName} bash -c '
-				if [ \$SANITY_SOLR_DOC_COUNT_MIN -gt \$(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json" | grep -oh "numFound\\":[[:digit:]]*" | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi
-			    '"""
+			    sh "docker exec -u jenkins ${containerName} curl 'http://localhost:8080/solr/select?q=*:*&rows=0&wt=json'"
+			    sh """docker exec ${containerName} bash -c "
+				if [ \\\$SANITY_SOLR_DOC_COUNT_MIN -gt \\\$(curl 'http://localhost:8080/solr/select?q=*:*&rows=0&wt=json' | grep -oh '\"numFound\":[[:digit:]]*' | grep -oh '[[:digit:]]*') ]; then exit 1; else echo 'We seem to be clear wrt doc count'; fi
+			    \""""
 
 			    // Test bioentity.
 			    echo "SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN:${env.SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN}"
-			    sh "docker exec ${containerName} su jenkins -c 'curl \"http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity\"'"
-			    sh """docker exec ${containerName} bash -c '
-				if [ \$SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN -gt \$(curl "http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity" | grep -oh "numFound\\":[[:digit:]]*" | grep -oh [[:digit:]]*) ]; then exit 1; else echo "We seem to be clear wrt doc count"; fi
-			    '"""
+			    sh "docker exec -u jenkins ${containerName} curl 'http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity'"
+			    sh """docker exec ${containerName} bash -c "
+				if [ \\\$SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN -gt \\\$(curl 'http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity' | grep -oh '\"numFound\":[[:digit:]]*' | grep -oh '[[:digit:]]*') ]; then exit 1; else echo 'We seem to be clear wrt doc count'; fi
+			    \""""
 			}
 
 			// Copy tmpfs Solr contents onto skyhook.
-			sh "docker exec ${containerName} su jenkins -c 'tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index .'"
+			sh "docker exec -u jenkins ${containerName} tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index ."
 			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
 			    sh "docker cp \"\$SKYHOOK_IDENTITY\" ${containerName}:/home/jenkins/.skyhook_key"
-			    sh "docker exec ${containerName} bash -c 'chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'"
+			    sh "docker exec ${containerName} bash -c \"chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key\""
 			    // Copy over index.
 			    // Copy over log.
-			    sh "docker exec ${containerName} su jenkins -c 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr-index-contents.tgz skyhook@'\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/products/solr/'"
-			    sh "docker exec ${containerName} su jenkins -c 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr_timestamp.log skyhook@'\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/products/solr/'"
+			    sh "docker exec -u jenkins ${containerName} scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr-index-contents.tgz skyhook@\$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"
+			    sh "docker exec -u jenkins ${containerName} scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr_timestamp.log skyhook@\$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"
 			}
 
 			// Solr should still be running in the
 			// background here from indexing--create stats
 			// products from running GOlr.
-			sh "docker exec ${containerName} bash -c 'chown -R jenkins:jenkins /workspace/go-stats'"
-			sh "docker exec ${containerName} bash -c 'mkdir -p /tmp/stats && chown jenkins:jenkins /tmp/stats'"
-			sh "docker exec ${containerName} su jenkins -c 'cp /workspace/go-stats/libraries/go-stats/*.py /tmp'"
+			sh "docker exec ${containerName} bash -c \"chown -R jenkins:jenkins /workspace/go-stats\""
+			sh "docker exec ${containerName} bash -c \"mkdir -p /tmp/stats && chown jenkins:jenkins /tmp/stats\""
+			sh "docker exec -u jenkins ${containerName} cp /workspace/go-stats/libraries/go-stats/*.py /tmp"
 
 			// Check that results have been stored properly.
 			echo "Check that results have been stored properly"
-			sh "docker exec ${containerName} su jenkins -c 'curl \"http://localhost:8080/solr/select?q=*:*&rows=0\"'"
+			sh "docker exec -u jenkins ${containerName} curl 'http://localhost:8080/solr/select?q=*:*&rows=0'"
 			echo "End of results"
 			retry(3){
-			    sh "docker exec ${containerName} su jenkins -c 'python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d \$START_DATE'"
+			    sh "docker exec -u jenkins ${containerName} python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d \$START_DATE"
 			}
 			retry(3) {
-			    sh "docker exec ${containerName} su jenkins -c 'cd /workspace/go-stats && wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json'"
+			    sh "docker exec -u jenkins ${containerName} bash -c \"cd /workspace/go-stats && wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json\""
 			}
 
 			// Roll the stats forward.
-			sh "docker exec ${containerName} su jenkins -c 'python3 /tmp/aggregate-stats.py -a /workspace/go-stats/aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json'"
+			sh "docker exec -u jenkins ${containerName} python3 /tmp/aggregate-stats.py -a /workspace/go-stats/aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json"
 
 			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
 			    sh "docker cp \"\$SKYHOOK_IDENTITY\" ${containerName}:/home/jenkins/.skyhook_key"
-			    sh "docker exec ${containerName} bash -c 'chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key'"
+			    sh "docker exec ${containerName} bash -c \"chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key\""
 			    retry(3) {
 				// Copy over stats files.
-				sh "docker exec ${containerName} su jenkins -c 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/stats/* skyhook@'\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/release_stats/'"
+				sh "docker exec -u jenkins ${containerName} scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/stats/* skyhook@\$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/release_stats/"
 			    }
 			}
 
@@ -520,7 +525,7 @@ pipeline {
 			sleep time: 2, unit: 'MINUTES'
 
 			// Fix ownership so jenkins user can clean up.
-			sh "docker exec ${containerName} bash -c 'chown -R \$JENKINS_UID:\$JENKINS_GID /workspace || true'"
+			sh "docker exec ${containerName} bash -c \"chown -R \\\$JENKINS_UID:\\\$JENKINS_GID /workspace || true\""
 
 		    } finally {
 			// Explicit container cleanup -- this is the
