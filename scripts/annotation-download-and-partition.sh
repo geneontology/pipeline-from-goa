@@ -55,8 +55,12 @@ su jenkins -c 'ls -AlF /tmp/merged'
 su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/merged/union* skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/TEMP/"
 
 # Push merged files to S3.
-chmod a+r /secrets/s3cmd.cfg
-su jenkins -c 's3cmd -c /secrets/s3cmd.cfg --acl-public put /tmp/merged/union* s3://go-public/skyhook-geneontology-io/'
+# Copy the s3cmd config to a writable location and make it readable
+# for the jenkins user (the bind-mounted /secrets/s3cmd.cfg is
+# read-only).
+cp /secrets/s3cmd.cfg /tmp/s3cmd.cfg
+chmod a+r /tmp/s3cmd.cfg
+su jenkins -c 's3cmd -c /tmp/s3cmd.cfg --acl-public put /tmp/merged/union* s3://go-public/skyhook-geneontology-io/'
 
 # Fix ownership so jenkins user can clean up.
 chown -R "$JENKINS_UID:$JENKINS_GID" /workspace || true
