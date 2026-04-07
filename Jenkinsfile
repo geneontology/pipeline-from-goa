@@ -268,10 +268,13 @@ pipeline {
 			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
 		    }
 
-		    // Run all container work via raw docker run,
-		    // bypassing the unmaintained docker-workflow
-		    // plugin to avoid container teardown failures
-		    // (JENKINS-73567).
+		    // Fetch the in-container script fresh from the
+		    // current branch on GitHub. This lets us iterate
+		    // on script bugs without re-running the whole
+		    // pipeline -- push a script fix and Restart
+		    // From Stage will pick it up.
+		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/annotation-download-and-partition.sh -o ./scripts/annotation-download-and-partition.sh"
+
 		    withCredentials([
 			file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'),
 			string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE'),
@@ -280,62 +283,20 @@ pipeline {
 			string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')
 		    ]) {
 			sh """
-			    docker run --rm \
-			      --init \
-			      --mount type=tmpfs,destination=/tmp \
-			      -u root:root \
-			      -v "\$WORKSPACE":/workspace \
-			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \
-			      -v "\$S3CMD_JSON":/secrets/s3cmd.cfg:ro \
-			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \
-			      -e AWS_ACCESS_KEY_ID="\$AWS_ACCESS_KEY_ID" \
-			      -e AWS_SECRET_ACCESS_KEY="\$AWS_SECRET_ACCESS_KEY" \
-			      -e JENKINS_UID="\$JENKINS_UID" \
-			      -e JENKINS_GID="\$JENKINS_GID" \
-			      ubuntu:noble bash -c "
-				# WARNING: MEGAHACK
-				echo 'nameserver 8.8.8.8' > /etc/resolv.conf
-				echo 'search lbl.gov' >> /etc/resolv.conf
-
-				DEBIAN_FRONTEND=noninteractive apt-get update
-				DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-yaml openssh-client s3cmd
-
-				# Create jenkins user matching host UID/GID.
-				groupadd -g \\\$JENKINS_GID jenkins || true
-				useradd -u \\\$JENKINS_UID -g \\\$JENKINS_GID -m -s /bin/bash jenkins
-				chown -R jenkins:jenkins /workspace
-				chown jenkins:jenkins /tmp
-
-				# Set up skyhook key for jenkins user.
-				cp /secrets/skyhook_key /home/jenkins/.skyhook_key
-				chown jenkins:jenkins /home/jenkins/.skyhook_key
-				chmod 0600 /home/jenkins/.skyhook_key
-
-				cd /workspace/go-site
-				chown -R jenkins:jenkins .
-
-				# Download annotations.
-				su jenkins -c 'ls -AlF'
-				su jenkins -c 'python3 scripts/download_goex_data.py /tmp/goex'
-
-				# Copy to skyhook for record.
-				su jenkins -c 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/goex/*.gaf.gz skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/annotations/'
-
-				# Partition.
-				su jenkins -c 'ls -AlF /tmp/goex'
-				su jenkins -c 'python3 scripts/partition_and_merge_gaf.py /tmp/goex /tmp/merged union 10'
-				su jenkins -c 'ls -AlF /tmp/merged'
-
-				# Copy merged files to skyhook.
-				su jenkins -c 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/merged/union* skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/TEMP/'
-
-				# Push merged files to S3.
-				chmod a+r /secrets/s3cmd.cfg
-				su jenkins -c 's3cmd -c /secrets/s3cmd.cfg --acl-public put /tmp/merged/union* s3://go-public/skyhook-geneontology-io/'
-
-				# Fix ownership so jenkins user can clean up.
-				chown -R \\\$JENKINS_UID:\\\$JENKINS_GID /workspace || true
-			      "
+			    docker run --rm \\
+			      --init \\
+			      --mount type=tmpfs,destination=/tmp \\
+			      -u root:root \\
+			      -v "\$WORKSPACE":/workspace \\
+			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \\
+			      -v "\$S3CMD_JSON":/secrets/s3cmd.cfg:ro \\
+			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \\
+			      -e AWS_ACCESS_KEY_ID="\$AWS_ACCESS_KEY_ID" \\
+			      -e AWS_SECRET_ACCESS_KEY="\$AWS_SECRET_ACCESS_KEY" \\
+			      -e JENKINS_UID="\$JENKINS_UID" \\
+			      -e JENKINS_GID="\$JENKINS_GID" \\
+			      ubuntu:noble \\
+			      bash /workspace/scripts/annotation-download-and-partition.sh
 			"""
 		    }
 		}
@@ -396,138 +357,39 @@ pipeline {
 			git branch: TARGET_GO_STATS_BRANCH, url: 'https://github.com/geneontology/go-stats.git'
 		    }
 
-		    // Use raw docker run -d + docker exec to
-		    // bypass the unmaintained docker-workflow
-		    // plugin and avoid container teardown failures
-		    // (JENKINS-73567). This stage needs a
-		    // long-running Solr service, so we use a named
-		    // container with explicit lifecycle management.
-		    def containerName = "golr-${env.BUILD_NUMBER}"
+		    // Fetch the in-container script fresh from the
+		    // current branch on GitHub. This lets us iterate
+		    // on script bugs without re-running the whole
+		    // pipeline -- push a script fix and Restart
+		    // From Stage will pick it up.
+		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/produce-derivatives.sh -o ./scripts/produce-derivatives.sh"
 
-		    try {
-			// Start the container detached. All real
-			// work happens via docker exec.
+		    withCredentials([
+			file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'),
+			string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')
+		    ]) {
 			sh """
-			    docker run -d \
-			      --name ${containerName} \
-			      --init \
-			      --mount type=tmpfs,destination=/srv/solr/data \
-			      -u root:root \
-			      -v "\$WORKSPACE":/workspace \
-			      -e JENKINS_UID="\$JENKINS_UID" \
-			      -e JENKINS_GID="\$JENKINS_GID" \
-			      -e START_DATE="\$START_DATE" \
-			      -e SANITY_SOLR_DOC_COUNT_MIN="\$SANITY_SOLR_DOC_COUNT_MIN" \
-			      -e SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN="\$SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN" \
-			      -e GOLR_INPUT_ONTOLOGIES="\$GOLR_INPUT_ONTOLOGIES" \
-			      -e GOLR_INPUT_GAFS="\$GOLR_INPUT_GAFS" \
-			      -e GOLR_INPUT_PANTHER_TREES="\$GOLR_INPUT_PANTHER_TREES" \
-			      -e GOLR_SOLR_MEMORY="\$GOLR_SOLR_MEMORY" \
-			      -e GOLR_LOADER_MEMORY="\$GOLR_LOADER_MEMORY" \
-			      geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master \
-			      tail -f /dev/null
+			    docker run --rm \\
+			      --init \\
+			      --mount type=tmpfs,destination=/srv/solr/data \\
+			      -u root:root \\
+			      -v "\$WORKSPACE":/workspace \\
+			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \\
+			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \\
+			      -e JENKINS_UID="\$JENKINS_UID" \\
+			      -e JENKINS_GID="\$JENKINS_GID" \\
+			      -e START_DATE="\$START_DATE" \\
+			      -e BRANCH_NAME="\$BRANCH_NAME" \\
+			      -e SANITY_SOLR_DOC_COUNT_MIN="\$SANITY_SOLR_DOC_COUNT_MIN" \\
+			      -e SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN="\$SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN" \\
+			      -e GOLR_INPUT_ONTOLOGIES="\$GOLR_INPUT_ONTOLOGIES" \\
+			      -e GOLR_INPUT_GAFS="\$GOLR_INPUT_GAFS" \\
+			      -e GOLR_INPUT_PANTHER_TREES="\$GOLR_INPUT_PANTHER_TREES" \\
+			      -e GOLR_SOLR_MEMORY="\$GOLR_SOLR_MEMORY" \\
+			      -e GOLR_LOADER_MEMORY="\$GOLR_LOADER_MEMORY" \\
+			      geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master \\
+			      bash /workspace/scripts/produce-derivatives.sh
 			"""
-
-			// WARNING: MEGAHACK
-			sh "docker exec ${containerName} bash -c \"echo 'nameserver 8.8.8.8' > /etc/resolv.conf && echo 'search lbl.gov' >> /etc/resolv.conf\""
-
-			// WARNING: MEGAHACK
-			// See attempts around: https://github.com/geneontology/pipeline/issues/407#issuecomment-2513461418
-			// Remove optimize, bump jetty timeout.
-			sh """docker exec ${containerName} bash -c "set -e; cat /tmp/run-indexer.sh | sed 's/--solr-optimize//' > /tmp/run-indexer-no-opt.sh; cat /etc/default/jetty9 | sed 's/Xmx3g/Xmx16g -Djetty.timeout=300000/' > /tmp/jetty9.tmp; mv /tmp/jetty9.tmp /etc/default/jetty9; cat /etc/jetty9/start.ini | sed 's/http.timeout=300000/http.timeout=3000000/' > /tmp/start.ini.tmp; mv /tmp/start.ini.tmp /etc/jetty9/start.ini\""""
-
-			// Install pip dependencies as root (before
-			// dropping privileges) since they go into
-			// system site-packages.
-			sh "docker exec ${containerName} pip3 install --force-reinstall requests==2.19.1"
-			sh "docker exec ${containerName} pip3 install --force-reinstall networkx==2.2"
-
-			// Create jenkins user matching host UID/GID.
-			sh "docker exec ${containerName} bash -c \"groupadd -g \\\$JENKINS_GID jenkins || true\""
-			sh "docker exec ${containerName} bash -c \"useradd -u \\\$JENKINS_UID -g \\\$JENKINS_GID -m -s /bin/bash jenkins\""
-
-			// Build index into tmpfs (stays as root for
-			// Solr/Jetty service management).
-			sh "docker exec ${containerName} bash /tmp/run-indexer-no-opt.sh"
-
-			// After indexer completes, fix ownership for
-			// jenkins user.
-			sh "docker exec ${containerName} bash -c \"chown -R jenkins:jenkins /workspace && chmod -R a+r /srv/solr/data\""
-
-			// Immediately check to see if it looks like
-			// we have enough docs when trying a release.
-			if( env.BRANCH_NAME == 'release' ){
-
-			    // Test overall.
-			    echo "SANITY_SOLR_DOC_COUNT_MIN:${env.SANITY_SOLR_DOC_COUNT_MIN}"
-			    sh "docker exec -u jenkins ${containerName} curl 'http://localhost:8080/solr/select?q=*:*&rows=0&wt=json'"
-			    sh """docker exec ${containerName} bash -c "
-				if [ \\\$SANITY_SOLR_DOC_COUNT_MIN -gt \\\$(curl 'http://localhost:8080/solr/select?q=*:*&rows=0&wt=json' | grep -oh '\"numFound\":[[:digit:]]*' | grep -oh '[[:digit:]]*') ]; then exit 1; else echo 'We seem to be clear wrt doc count'; fi
-			    \""""
-
-			    // Test bioentity.
-			    echo "SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN:${env.SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN}"
-			    sh "docker exec -u jenkins ${containerName} curl 'http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity'"
-			    sh """docker exec ${containerName} bash -c "
-				if [ \\\$SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN -gt \\\$(curl 'http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:bioentity' | grep -oh '\"numFound\":[[:digit:]]*' | grep -oh '[[:digit:]]*') ]; then exit 1; else echo 'We seem to be clear wrt doc count'; fi
-			    \""""
-			}
-
-			// Copy tmpfs Solr contents onto skyhook.
-			sh "docker exec -u jenkins ${containerName} tar --use-compress-program=pigz -cvf /tmp/golr-index-contents.tgz -C /srv/solr/data/index ."
-			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-			    sh "docker cp \"\$SKYHOOK_IDENTITY\" ${containerName}:/home/jenkins/.skyhook_key"
-			    sh "docker exec ${containerName} bash -c \"chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key\""
-			    // Copy over index.
-			    // Copy over log.
-			    sh "docker exec -u jenkins ${containerName} scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr-index-contents.tgz skyhook@\$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"
-			    sh "docker exec -u jenkins ${containerName} scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/golr_timestamp.log skyhook@\$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/solr/"
-			}
-
-			// Solr should still be running in the
-			// background here from indexing--create stats
-			// products from running GOlr.
-			sh "docker exec ${containerName} bash -c \"chown -R jenkins:jenkins /workspace/go-stats\""
-			sh "docker exec ${containerName} bash -c \"mkdir -p /tmp/stats && chown jenkins:jenkins /tmp/stats\""
-			sh "docker exec -u jenkins ${containerName} cp /workspace/go-stats/libraries/go-stats/*.py /tmp"
-
-			// Check that results have been stored properly.
-			echo "Check that results have been stored properly"
-			sh "docker exec -u jenkins ${containerName} curl 'http://localhost:8080/solr/select?q=*:*&rows=0'"
-			echo "End of results"
-			retry(3){
-			    sh "docker exec -u jenkins ${containerName} python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d \$START_DATE"
-			}
-			retry(3) {
-			    sh "docker exec -u jenkins ${containerName} bash -c \"cd /workspace/go-stats && wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json\""
-			}
-
-			// Roll the stats forward.
-			sh "docker exec -u jenkins ${containerName} python3 /tmp/aggregate-stats.py -a /workspace/go-stats/aggregated-go-stats-summaries.json -b /tmp/stats/go-stats-summary.json -o /tmp/stats/aggregated-go-stats-summaries.json"
-
-			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-			    sh "docker cp \"\$SKYHOOK_IDENTITY\" ${containerName}:/home/jenkins/.skyhook_key"
-			    sh "docker exec ${containerName} bash -c \"chown jenkins:jenkins /home/jenkins/.skyhook_key && chmod 0600 /home/jenkins/.skyhook_key\""
-			    retry(3) {
-				// Copy over stats files.
-				sh "docker exec -u jenkins ${containerName} scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/stats/* skyhook@\$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/release_stats/"
-			    }
-			}
-
-			// See if sleeping a little gives the tmpfs
-			// a little time to catch up.
-			sleep time: 2, unit: 'MINUTES'
-
-			// Fix ownership so jenkins user can clean up.
-			sh "docker exec ${containerName} bash -c \"chown -R \\\$JENKINS_UID:\\\$JENKINS_GID /workspace || true\""
-
-		    } finally {
-			// Explicit container cleanup -- this is the
-			// whole point of the migration away from the
-			// docker-workflow plugin. No more "Failed to
-			// kill container" build failures.
-			sh "docker stop ${containerName} || true"
-			sh "docker rm -f ${containerName} || true"
 		    }
 		}
 	    }
@@ -544,113 +406,30 @@ pipeline {
 			git branch: TARGET_GOCAM_PY_BRANCH, url: 'https://github.com/geneontology/gocam-py.git'
 		    }
 
-		    // Run all container work via raw docker run,
-		    // bypassing the unmaintained docker-workflow
-		    // plugin to avoid container teardown failures
-		    // (JENKINS-73567).
+		    // Fetch the in-container script fresh from the
+		    // current branch on GitHub. This lets us iterate
+		    // on script bugs without re-running the whole
+		    // pipeline -- push a script fix and Restart
+		    // From Stage will pick it up.
+		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/gocam-processing.sh -o ./scripts/gocam-processing.sh"
+
 		    withCredentials([
 			file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'),
 			string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')
 		    ]) {
 			sh """
-			    docker run --rm \
-			      --init \
-			      --mount type=tmpfs,destination=/tmp \
-			      -u root:root \
-			      -v "\$WORKSPACE":/workspace \
-			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \
-			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \
-			      -e JENKINS_UID="\$JENKINS_UID" \
-			      -e JENKINS_GID="\$JENKINS_GID" \
-			      -e MINERVA_JSON_TARBALL_URL="\$MINERVA_JSON_TARBALL_URL" \
-			      ubuntu:noble bash -c "
-				# WARNING: MEGAHACK
-				echo 'nameserver 8.8.8.8' > /etc/resolv.conf
-				echo 'search lbl.gov' >> /etc/resolv.conf
-
-				# Install system dependencies.
-				DEBIAN_FRONTEND=noninteractive apt-get update
-				DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-pip python3-venv git openssh-client wget graphviz libgraphviz-dev
-
-				# Install uv (not available in Ubuntu apt repos).
-				pip3 install --break-system-packages uv
-
-				# Create jenkins user matching host UID/GID.
-				groupadd -g \\\$JENKINS_GID jenkins || true
-				useradd -u \\\$JENKINS_UID -g \\\$JENKINS_GID -m -s /bin/bash jenkins
-				chown -R jenkins:jenkins /workspace
-				chown jenkins:jenkins /tmp
-
-				# Set up skyhook key for jenkins user.
-				cp /secrets/skyhook_key /home/jenkins/.skyhook_key
-				chown jenkins:jenkins /home/jenkins/.skyhook_key
-				chmod 0600 /home/jenkins/.skyhook_key
-
-				# Install gocam-py dependencies.
-				cd /workspace/gocam-py
-				chown -R jenkins:jenkins .
-				# Mark repo safe for git; needed because
-				# uv-dynamic-versioning uses git.
-				su jenkins -c 'git config --global --add safe.directory /workspace/gocam-py'
-				su jenkins -c 'uv sync --all-extras'
-
-				# Set up working directory structure.
-				su jenkins -c 'mkdir -p /tmp/gocam-work/input /tmp/gocam-work/01-gocam-models /tmp/gocam-work/02-true-gocams /tmp/gocam-work/02-pseudo-gocams /tmp/gocam-work/03-indexed-true-gocams /tmp/gocam-work/04-index-files /tmp/gocam-work/05-browser-search-docs /tmp/gocam-work/reports'
-
-				# Download and extract Minerva JSON tarball.
-				su jenkins -c 'wget -q -O /tmp/gocam-work/minerva-models.tar.gz '\\\$MINERVA_JSON_TARBALL_URL''
-				su jenkins -c 'tar -xzf /tmp/gocam-work/minerva-models.tar.gz -C /tmp/gocam-work/input'
-
-				# Download released GO ontology and GOC groups
-				# metadata from current.geneontology.org for use
-				# in step 3 (indexing).
-				su jenkins -c 'wget -q -O /tmp/gocam-work/go.obo https://current.geneontology.org/ontology/go.obo'
-				su jenkins -c 'wget -q -O /tmp/gocam-work/groups.yaml https://current.geneontology.org/metadata/groups.yaml'
-
-				# Step 1: Convert Minerva models to GO-CAM models.
-				su jenkins -c 'uv run python pipeline/convert_minerva_models_to_gocam_models.py --input-dir /tmp/gocam-work/input --output-dir /tmp/gocam-work/01-gocam-models --report-file /tmp/gocam-work/reports/01-convert.json --verbose'
-
-				# Step 2: Filter true GO-CAM models from pseudo GO-CAMs.
-				su jenkins -c 'uv run python pipeline/filter_true_gocam_models.py --input-dir /tmp/gocam-work/01-gocam-models --output-dir /tmp/gocam-work/02-true-gocams --pseudo-gocam-output-dir /tmp/gocam-work/02-pseudo-gocams --report-file /tmp/gocam-work/reports/02-filter.json --verbose'
-
-				# Step 3: Add query index (OAK lookups) to models.
-				# Uses released GO ontology via pronto adapter.
-				# NCBITaxon is not a GO product, so it still
-				# auto-downloads from OBO Foundry (sqlite:obo:ncbitaxon).
-				su jenkins -c 'uv run python pipeline/add_query_index_to_models.py --input-dir /tmp/gocam-work/02-true-gocams --output-dir /tmp/gocam-work/03-indexed-true-gocams --report-file /tmp/gocam-work/reports/03-index.json --go-adapter-descriptor pronto:/tmp/gocam-work/go.obo --goc-groups-yaml /tmp/gocam-work/groups.yaml --verbose'
-
-				# Step 4: Generate index files (~6 JSON files).
-				su jenkins -c 'uv run python pipeline/generate_index_files.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/04-index-files --report-file /tmp/gocam-work/reports/04-index-files.json --verbose'
-
-				# Step 5: Generate GO-CAM Browser search docs (1 JSON file).
-				su jenkins -c 'uv run python pipeline/generate_go_cam_browser_search_docs.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json --report-file /tmp/gocam-work/reports/05-browser-search.json --verbose'
-
-				# Upload release artifacts to skyhook
-				# with retry logic for each scp.
-				for i in 1 2 3; do
-				    su jenkins -c 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/02-true-gocams/* skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/go-cams/json/' && break
-				    sleep 5
-				done
-				for i in 1 2 3; do
-				    su jenkins -c 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/03-indexed-true-gocams/* skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/products/indexed-go-cams/' && break
-				    sleep 5
-				done
-				for i in 1 2 3; do
-				    su jenkins -c 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/04-index-files/* skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/go-cams/index-json/' && break
-				    sleep 5
-				done
-				for i in 1 2 3; do
-				    su jenkins -c 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/products/go-cam-search/' && break
-				    sleep 5
-				done
-				for i in 1 2 3; do
-				    su jenkins -c 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/gocam-work/reports/* skyhook@'\\\$SKYHOOK_MACHINE':/home/skyhook/pipeline-from-goa/main/reports/go-cam/' && break
-				    sleep 5
-				done
-
-				# Fix ownership so jenkins user can clean up.
-				chown -R \\\$JENKINS_UID:\\\$JENKINS_GID /workspace || true
-			      "
+			    docker run --rm \\
+			      --init \\
+			      --mount type=tmpfs,destination=/tmp \\
+			      -u root:root \\
+			      -v "\$WORKSPACE":/workspace \\
+			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \\
+			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \\
+			      -e JENKINS_UID="\$JENKINS_UID" \\
+			      -e JENKINS_GID="\$JENKINS_GID" \\
+			      -e MINERVA_JSON_TARBALL_URL="\$MINERVA_JSON_TARBALL_URL" \\
+			      ubuntu:noble \\
+			      bash /workspace/scripts/gocam-processing.sh
 			"""
 		    }
 		}
