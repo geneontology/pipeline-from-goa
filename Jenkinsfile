@@ -434,13 +434,7 @@ pipeline {
 			// WARNING: MEGAHACK
 			// See attempts around: https://github.com/geneontology/pipeline/issues/407#issuecomment-2513461418
 			// Remove optimize, bump jetty timeout.
-			sh """docker exec ${containerName} bash -c "
-			    cat /tmp/run-indexer.sh | sed 's/--solr-optimize//' > /tmp/run-indexer-no-opt.sh
-			    && cat /etc/default/jetty9 | sed 's/Xmx3g/Xmx16g -Djetty.timeout=300000/' > /tmp/jetty9.tmp
-			    && mv /tmp/jetty9.tmp /etc/default/jetty9
-			    && cat /etc/jetty9/start.ini | sed 's/http.timeout=300000/http.timeout=3000000/' > /tmp/start.ini.tmp
-			    && mv /tmp/start.ini.tmp /etc/jetty9/start.ini
-			\""""
+			sh """docker exec ${containerName} bash -c "set -e; cat /tmp/run-indexer.sh | sed 's/--solr-optimize//' > /tmp/run-indexer-no-opt.sh; cat /etc/default/jetty9 | sed 's/Xmx3g/Xmx16g -Djetty.timeout=300000/' > /tmp/jetty9.tmp; mv /tmp/jetty9.tmp /etc/default/jetty9; cat /etc/jetty9/start.ini | sed 's/http.timeout=300000/http.timeout=3000000/' > /tmp/start.ini.tmp; mv /tmp/start.ini.tmp /etc/jetty9/start.ini\""""
 
 			// Install pip dependencies as root (before
 			// dropping privileges) since they go into
