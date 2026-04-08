@@ -83,21 +83,59 @@ It is clear, well-known, and present in every base image. We do not
 swap it for `runuser`/`gosu`/`setpriv` -- consistency matters more
 than the small ergonomic wins.
 
-### Iteration cost
+### Iteration cost and recovery model
 
-A full pipeline run takes several hours. To iterate on a script bug
-without re-running the whole pipeline:
+A full pipeline run takes several hours. There are two distinct
+iteration paths depending on what changed:
+
+#### Script change → fast (Restart from Stage)
+
+For bugs in `scripts/*.sh`:
 
 1. Edit the script in `scripts/`
 2. `shellcheck scripts/*.sh`
 3. `git commit && git push`
 4. In Jenkins UI: click the failed build → "Restart from Stage" →
    pick the failing stage
-5. The replayed Jenkinsfile fetches the latest script from the
-   branch via curl, picking up your fix
 
-This works because the scripts are fetched at runtime from GitHub
-raw URLs, not from the SCM checkout that Restart-from-Stage replays.
+This works because the scripts are fetched at runtime from
+`raw.githubusercontent.com` via `curl` in the stage. Restart from
+Stage replays the **original build's pinned Jenkinsfile and SCM
+revision**, but the curl fetches the latest script from the branch,
+so the fix takes effect.
+
+**This is the whole reason we externalized scripts.** Keep the bash
+in `scripts/`, not inline in the Jenkinsfile, so the fast path
+remains usable.
+
+#### Jenkinsfile change → slow (Scan Repository Now + new build)
+
+For bugs in the Jenkinsfile itself (stage structure, env vars, git
+URLs, credential IDs, etc.):
+
+Restart from Stage **cannot** pick up Jenkinsfile changes. It pins
+the original build's Jenkinsfile and SCM revision; new commits are
+ignored.
+
+The correct workflow:
+
+1. Edit the Jenkinsfile carefully (Jenkinsfile changes are
+   expensive -- see below)
+2. `git commit && git push`
+3. In Jenkins UI, navigate to the multibranch project and click
+   **"Scan Repository Now"** to make Jenkins discover the new
+   commit
+4. A new build will be triggered that uses the latest Jenkinsfile
+5. This is a fresh build -- it runs from the first stage, including
+   the long indexer
+
+**Be extra careful when editing the Jenkinsfile.** A typo costs
+hours of pipeline time. Before pushing a Jenkinsfile change:
+- Read the diff carefully
+- Verify any new repo URLs / paths actually exist (`gh api ...`)
+- Verify any new credentials IDs are correct
+- Consider whether the change can be moved into a script instead
+  (scripts are cheap to iterate, the Jenkinsfile is expensive)
 
 ### Multi-line bash gotchas
 
