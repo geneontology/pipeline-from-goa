@@ -458,18 +458,21 @@ pipeline {
 	stage('Metadata and annotations README') {
 	    steps {
 		script {
-		    // Clone geneontology/metadata and copy to
-		    // skyhook. This replaces the old go-site
-		    // metadata directory copy.
-		    dir('./metadata-repo') {
-			git branch: 'main', url: 'https://github.com/geneontology/metadata.git'
+		    // The metadata directory lives inside go-site
+		    // (geneontology/go-site/metadata/). There is no
+		    // standalone geneontology/metadata repo. Clone
+		    // go-site here under a dedicated directory so
+		    // this stage is independent of stage ordering
+		    // and Restart-from-Stage scenarios.
+		    dir('./go-site-for-metadata') {
+			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
 		    }
 
 		    // Download annotation README from go-site.
 		    sh 'wget -N https://raw.githubusercontent.com/geneontology/go-site/$TARGET_GO_SITE_BRANCH/static/pages/README-annotation-downloads.txt'
 
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-			sh 'rsync -avz --exclude=".git" -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" ./metadata-repo/ skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/metadata/'
+			sh 'rsync -avz --exclude=".git" -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" ./go-site-for-metadata/metadata/ skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/metadata/'
 			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY README-annotation-downloads.txt skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/annotations/README.txt'
 		    }
 		}
