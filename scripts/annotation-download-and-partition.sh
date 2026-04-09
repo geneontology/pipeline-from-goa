@@ -39,9 +39,14 @@ chmod 0600 /home/jenkins/.skyhook_key
 cd /workspace/go-site
 chown -R jenkins:jenkins .
 
-# Download annotations.
+# Download annotations from the GOEx mirror at
+# mirror.geneontology.io. The mirror is populated by the
+# Populate GOEx mirror stage that runs earlier in the pipeline.
+# Falling back to EBI directly is intentionally NOT done here --
+# we want the mirror to be the single source of truth so that
+# EBI flakiness does not block the pipeline.
 su jenkins -c 'ls -AlF'
-su jenkins -c 'python3 scripts/download_goex_data.py /tmp/goex'
+su jenkins -c 'python3 scripts/download_goex_data.py --base-url https://mirror.geneontology.io/goex/current/gaf/ /tmp/goex'
 
 # Copy to skyhook for record.
 su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/goex/*.gaf.gz skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/annotations/"

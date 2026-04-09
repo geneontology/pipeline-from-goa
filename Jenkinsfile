@@ -93,6 +93,11 @@ pipeline {
 	//AWS_CLOUDFRONT_RELEASE_DISTRIBUTION_ID = 'E2HF1DWYYDLTQP'
 	AWS_CLOUDFRONT_DISTRIBUTION_ID = 'null'
 	AWS_CLOUDFRONT_RELEASE_DISTRIBUTION_ID = 'null'
+	// CloudFront distribution for mirror.geneontology.io,
+	// used by the Populate GOEx mirror stage to invalidate
+	// the goex/ paths after S3 sync. Inherited from the
+	// legacy goa-copy-to-mirror branch of geneontology/pipeline.
+	GOEX_MIRROR_CLOUDFRONT_DISTRIBUTION_ID = 'E3CS5SXBMY15JK'
 
 	///
 	/// Ontobio Validation
@@ -255,6 +260,51 @@ pipeline {
 		    // Copy to skyhook for record.
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
 			sh 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./pub/contrib/goa/goex/current/ontology/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/ontology/'
+		    }
+		}
+	    }
+	}
+
+	stage('Populate GOEx mirror') {
+	    steps {
+		script {
+		    // Clone go-site to a dedicated directory so we
+		    // get download_goex_data.py and metadata/goex.yaml.
+		    dir('./go-site-for-mirror') {
+			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
+		    }
+
+		    // Fetch the in-container script fresh from the
+		    // current branch on GitHub.
+		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/populate-goex-mirror.sh -o ./scripts/populate-goex-mirror.sh"
+
+		    // Best-effort: if the populate fails (e.g. EBI
+		    // is down), log and continue. The Annotation
+		    // download stage that follows will use whatever
+		    // is currently in the mirror.
+		    try {
+			withCredentials([
+			    string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'),
+			    string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')
+			]) {
+			    sh """
+				docker run --rm \\
+				  --init \\
+				  --mount type=tmpfs,destination=/tmp \\
+				  -u root:root \\
+				  -v "\$WORKSPACE":/workspace \\
+				  -e AWS_ACCESS_KEY_ID="\$AWS_ACCESS_KEY_ID" \\
+				  -e AWS_SECRET_ACCESS_KEY="\$AWS_SECRET_ACCESS_KEY" \\
+				  -e GOEX_MIRROR_CLOUDFRONT_DISTRIBUTION_ID="\$GOEX_MIRROR_CLOUDFRONT_DISTRIBUTION_ID" \\
+				  -e JENKINS_UID="\$JENKINS_UID" \\
+				  -e JENKINS_GID="\$JENKINS_GID" \\
+				  ubuntu:noble \\
+				  bash /workspace/scripts/populate-goex-mirror.sh
+			    """
+			}
+		    } catch (e) {
+			echo "Populate GOEx mirror stage failed: ${e.message}"
+			echo "Proceeding with whatever is currently in the mirror."
 		    }
 		}
 	    }
