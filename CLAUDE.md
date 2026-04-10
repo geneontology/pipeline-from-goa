@@ -1,5 +1,20 @@
 # Pipeline-from-GOA
 
+## Issue and commit hygiene
+
+Every commit and PR must reference a GitHub issue. Every issue must
+be assigned to a project. The chain is:
+
+    commit → issue → project
+
+- Commits: end the first line with `; for geneontology/pipeline-from-goa#NN`
+- PRs: reference the issue in the body
+- Issues: must be added to the **GOEx Data Exchange** project (or
+  the relevant project if scope changes)
+
+If no issue exists for the work being done, create one first. Do
+not commit without an issue reference.
+
 ## Jenkins CI
 
 This project uses a Jenkins CI instance for builds. To debug build
