@@ -39,9 +39,11 @@ DOWNLOAD_BACKOFF_SECONDS=60
 echo 'nameserver 8.8.8.8' > /etc/resolv.conf
 echo 'search lbl.gov' >> /etc/resolv.conf
 
-# Install system dependencies.
+# Install system dependencies. awscli was removed from Ubuntu
+# Noble's repos; install via pip instead.
 DEBIAN_FRONTEND=noninteractive apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-yaml awscli
+DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-pip python3-yaml
+pip3 install --break-system-packages awscli
 
 # Create jenkins user matching host UID/GID.
 groupadd -g "$JENKINS_GID" jenkins || true
