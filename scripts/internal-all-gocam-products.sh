@@ -38,7 +38,7 @@ DEBIAN_FRONTEND=noninteractive apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get -y install \
     openjdk-21-jdk-headless maven \
     python3 python3-pip python3-venv python3-yaml \
-    git openssh-client wget perl pigz
+    git openssh-client rsync wget perl pigz
 
 # Install uv and awscli (not in Ubuntu apt repos).
 pip3 install --break-system-packages uv
@@ -153,14 +153,18 @@ print(f'YAML conversion: {ok} ok, {fail} failed', file=sys.stderr)
 ### Phase 7: Upload to skyhook
 ###
 
-# Helper for retried scp.
-scp_retry() {
-    local flags="$1"
-    local src="$2"
-    local dst="$3"
+# Helper for retried rsync. Use rsync instead of scp because the "all"
+# GO-CAM set is ~50k+ files per directory; scp with a shell glob
+# ("/src/*") exceeds ARG_MAX when expanded by the shell. rsync walks
+# directories internally and doesn't have that problem.
+# Note: rsync uses trailing-slash semantics -- "/src/" means "copy
+# contents of /src into /dst/", matching what the old scp -r /src/* did.
+rsync_retry() {
+    local src="$1"
+    local dst="$2"
     local _i
     for _i in 1 2 3; do
-        if su jenkins -c "scp $flags -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key $src $dst"; then
+        if su jenkins -c "rsync -a -e 'ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key' '$src' '$dst'"; then
             return 0
         fi
         sleep 5
@@ -170,10 +174,10 @@ scp_retry() {
 
 SKYHOOK_BASE="skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/internal"
 
-scp_retry "-r" "$WORK/gocam-json/*"       "${SKYHOOK_BASE}/all-go-cams-json/"
-scp_retry "-r" "$WORK/gocam-yaml/*"       "${SKYHOOK_BASE}/all-go-cams-yaml/"
-scp_retry ""   "$WORK/unified.gpad.gz"    "${SKYHOOK_BASE}/all-go-cams-gpad/"
-scp_retry "-r" "$WORK/legacy/gpad/*"      "${SKYHOOK_BASE}/all-go-cams-gpad/model/"
+rsync_retry "$WORK/gocam-json/"       "${SKYHOOK_BASE}/all-go-cams-json/"
+rsync_retry "$WORK/gocam-yaml/"       "${SKYHOOK_BASE}/all-go-cams-yaml/"
+rsync_retry "$WORK/unified.gpad.gz"   "${SKYHOOK_BASE}/all-go-cams-gpad/"
+rsync_retry "$WORK/legacy/gpad/"      "${SKYHOOK_BASE}/all-go-cams-gpad/model/"
 
 # Fix ownership so jenkins user can clean up.
 chown -R "$JENKINS_UID:$JENKINS_GID" /workspace || true
