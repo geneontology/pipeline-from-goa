@@ -57,7 +57,7 @@ su jenkins -c 'python3 scripts/partition_and_merge_gaf.py /tmp/goex /tmp/merged 
 su jenkins -c 'ls -AlF /tmp/merged'
 
 # Copy merged files to skyhook.
-su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/merged/union* skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/TEMP/"
+su jenkins -c "scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=/home/jenkins/.skyhook_key /tmp/merged/union* skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/internal/union-gaf-partitions/"
 
 # Push merged files to S3.
 # Copy the s3cmd config to a writable location and make it readable

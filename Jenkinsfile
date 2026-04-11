@@ -486,6 +486,49 @@ pipeline {
 	    }
 	}
 
+	stage('Internal all-GO-CAM products') {
+	    steps {
+		script {
+		    // Clone minerva on host (Jenkins git step).
+		    dir('./minerva') {
+			git branch: TARGET_MINERVA_BRANCH, url: 'https://github.com/geneontology/minerva.git'
+		    }
+
+		    // Reuse gocam-py from the prior stage (already
+		    // cloned into ./gocam-py by 'GO-CAM processing').
+
+		    // Fetch the in-container script fresh from the
+		    // current branch on GitHub.
+		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/internal-all-gocam-products.sh -o ./scripts/internal-all-gocam-products.sh"
+
+		    withCredentials([
+			file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'),
+			string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE'),
+			string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'),
+			string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')
+		    ]) {
+			sh """
+			    docker run --rm \\
+			      --init \\
+			      --mount type=tmpfs,destination=/tmp \\
+			      -u root:root \\
+			      -v "\$WORKSPACE":/workspace \\
+			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \\
+			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \\
+			      -e JENKINS_UID="\$JENKINS_UID" \\
+			      -e JENKINS_GID="\$JENKINS_GID" \\
+			      -e AWS_ACCESS_KEY_ID="\$AWS_ACCESS_KEY_ID" \\
+			      -e AWS_SECRET_ACCESS_KEY="\$AWS_SECRET_ACCESS_KEY" \\
+			      -e TARGET_GO_SITE_BRANCH="\$TARGET_GO_SITE_BRANCH" \\
+			      -e TARGET_MINERVA_BRANCH="\$TARGET_MINERVA_BRANCH" \\
+			      ubuntu:noble \\
+			      bash /workspace/scripts/internal-all-gocam-products.sh
+			"""
+		    }
+		}
+	    }
+	}
+
 	stage('QC reports download') {
 	    steps {
 		script {
@@ -1050,14 +1093,9 @@ void initialize() {
 	sh 'rm -r -f $WORKSPACE/mnt/$JOB_NAME || true'
 	// Rebuild directory structure.
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products || true'
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/ttl || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/json || true'
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/blazegraph || true'
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/upstream_and_raw_data || true'
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/pages || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/solr || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/panther || true'
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/gaferencer || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/indexed-go-cams || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/products/go-cam-search || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/go-cams/json || true'
@@ -1068,7 +1106,11 @@ void initialize() {
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/ontology || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/release_stats || true'
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/TEMP || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/internal/all-go-cams-json || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/internal/all-go-cams-yaml || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/internal/all-go-cams-gpad || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/internal/all-go-cams-gpad/model || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/internal/union-gaf-partitions || true'
 	// Tag the top to let the world know I was at least
 	// here.
 	sh 'echo "Runtime summary." > $WORKSPACE/mnt/$JOB_NAME/summary.txt'
