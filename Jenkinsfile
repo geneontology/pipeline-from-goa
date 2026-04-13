@@ -494,8 +494,12 @@ pipeline {
 			git branch: TARGET_MINERVA_BRANCH, url: 'https://github.com/geneontology/minerva.git'
 		    }
 
-		    // Reuse gocam-py from the prior stage (already
-		    // cloned into ./gocam-py by 'GO-CAM processing').
+		    // Clone gocam-py on host. Cannot reuse the
+		    // prior stage's clone because Restart from Stage
+		    // skips earlier stages.
+		    dir('./gocam-py') {
+			git branch: TARGET_GOCAM_PY_BRANCH, url: 'https://github.com/geneontology/gocam-py.git'
+		    }
 
 		    // Fetch the in-container script fresh from the
 		    // current branch on GitHub.
