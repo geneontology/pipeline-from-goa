@@ -478,6 +478,8 @@ pipeline {
 			      -e JENKINS_UID="\$JENKINS_UID" \\
 			      -e JENKINS_GID="\$JENKINS_GID" \\
 			      -e MINERVA_JSON_TARBALL_URL="\$MINERVA_JSON_TARBALL_URL" \\
+			      -e START_DATE="\$START_DATE" \\
+			      -e BRANCH_NAME="\$BRANCH_NAME" \\
 			      ubuntu:noble \\
 			      bash /workspace/scripts/gocam-processing.sh
 			"""
