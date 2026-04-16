@@ -546,9 +546,12 @@ pipeline {
 			echo "There has been a recursion/download failure for QC reports; accepting that this was likely fine, but check contents."
 		    }
 
-		    // Copy to skyhook.
+		    // Copy to skyhook. Per-source gorule reports go under
+		    // reports/groups/; everything else (gorules_test_errors.*
+		    // and any future EBI additions) lands at reports/ top level.
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-			sh 'scp -r -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./pub/contrib/goa/goex/current/qc_reports/* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/reports/'
+			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./pub/contrib/goa/goex/current/qc_reports/*_gorule_report.* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/reports/groups/'
+			sh 'rsync -avz --exclude="*_gorule_report.*" -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" ./pub/contrib/goa/goex/current/qc_reports/ skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/reports/'
 		    }
 		}
 	    }
@@ -1111,6 +1114,7 @@ void initialize() {
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/annotations || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/ontology || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports/groups || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/release_stats || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/internal/all-true-go-cams-json || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/internal/all-true-go-cams-yaml || true'
