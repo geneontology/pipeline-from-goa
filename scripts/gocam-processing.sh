@@ -76,7 +76,7 @@ su jenkins -c 'uv run python pipeline/generate_index_files.py --input-dir /tmp/g
 su jenkins -c 'uv run python pipeline/generate_go_cam_browser_search_docs.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json --report-file /tmp/gocam-work/reports/05-browser-search.jsonl --verbose'
 
 # Lastly: Generate summary report (1 Excel file).
-su jenkins -c 'uv run python pipeline/generate_log_summary.py --logs-dir /tmp/gocam-work/reports --output /tmp/gocam-work/reports/summary.xlsx --verbose'
+su jenkins -c "uv run python pipeline/generate_log_summary.py --logs-dir /tmp/gocam-work/reports --output /tmp/gocam-work/reports/summary.xlsx --metadata 'Release date=${START_DATE}' --metadata 'Pipeline name=pipeline-from-goa' --metadata 'Pipeline branch=${BRANCH_NAME}' --verbose"
 
 # Helper for retried scp.
 scp_retry() {
