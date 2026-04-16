@@ -3,9 +3,12 @@
 # Internal all-GO-CAM products stage.
 #
 # Produces the unfiltered "all" GO-CAM products for internal use:
-#   - all-go-cams-json/   (gocam-py JSON, all models)
-#   - all-go-cams-yaml/   (gocam-py YAML, all models)
-#   - all-go-cams-gpad/   (unified + per-model GPADs)
+#   - all-true-go-cams-json/  (gocam-py JSON, "true" GO-CAMs only,
+#                              as defined by gocam-py)
+#   - all-true-go-cams-yaml/  (gocam-py YAML, same set as above)
+#   - all-go-cams-gpad/       (unified + per-model GPADs, all
+#                              production GO-CAMs whether "true" or
+#                              not — extracted by minerva-cli)
 #
 # Input is TTL models from S3 (Noctua crontab export), NOT the
 # Minerva JSON tarball used by the "true" GO-CAM pipeline.
@@ -174,8 +177,8 @@ rsync_retry() {
 
 SKYHOOK_BASE="skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/internal"
 
-rsync_retry "$WORK/gocam-json/"       "${SKYHOOK_BASE}/all-go-cams-json/"
-rsync_retry "$WORK/gocam-yaml/"       "${SKYHOOK_BASE}/all-go-cams-yaml/"
+rsync_retry "$WORK/gocam-json/"       "${SKYHOOK_BASE}/all-true-go-cams-json/"
+rsync_retry "$WORK/gocam-yaml/"       "${SKYHOOK_BASE}/all-true-go-cams-yaml/"
 rsync_retry "$WORK/unified.gpad.gz"   "${SKYHOOK_BASE}/all-go-cams-gpad/"
 rsync_retry "$WORK/legacy/gpad/"      "${SKYHOOK_BASE}/all-go-cams-gpad/model/"
 
