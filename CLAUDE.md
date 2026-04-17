@@ -9,11 +9,67 @@ be assigned to a project. The chain is:
 
 - Commits: end the first line with `; for geneontology/pipeline-from-goa#NN`
 - PRs: reference the issue in the body
-- Issues: must be added to the **GOEx Data Exchange** project (or
-  the relevant project if scope changes)
+- Issues: must be added to the active project (see "Which project"
+  below)
 
 If no issue exists for the work being done, create one first. Do
 not commit without an issue reference.
+
+### Picking the right issue
+
+Issues are read by non-technical project managers and biologists,
+so issue titles and bodies should tell the project story at a level
+they can follow. Technical detail (file paths, retry counts, glob
+patterns, etc.) belongs in the **commit message** or PR body, not
+the issue.
+
+When picking the issue to tag in a commit footer:
+
+- Pick by **story fit**, not topic-keyword match or "precedent from
+  a prior commit." The right issue is the one whose narrative the
+  commit advances.
+- If no issue is an exact match, walk **up the hierarchy of
+  generality**. A small reliability fix can sit under a broader
+  "ensure the pipeline produces files at expected locations" issue.
+- If unsure, **ask** rather than defaulting to the closest stretch.
+  Mis-tagging is recoverable via comments but generates churn.
+
+### Which project
+
+The active project for `pipeline-from-goa` work is currently
+**GOEx Data Exchange**, but the project will change over time as
+the work moves through phases (planning → active → closeout →
+successor project for the next phase). The repo stays the same;
+the project label drifts.
+
+If it isn't obvious from context which project is current — for
+example, by looking at recently-created issues and where they were
+assigned, or from the user's recent direction — **confirm with
+the user before assigning**. Don't assume a project name remembered
+from an earlier session is still the active one.
+
+## Renaming public-facing paths
+
+Before renaming any path that surfaces under
+`current.geneontology.org/` or
+`skyhook.geneontology.io/pipeline-from-goa/`, search the
+geneontology org for consumers:
+
+    gh search code 'PATH org:geneontology' --limit 100
+
+If repos like `geneontology.github.io`, `go-fastapi`, or `go-stats`
+hardcode the URL, the rename is **not** a unilateral change. It
+needs cross-repo coordination: open an issue (assign the relevant
+person, mark "In Progress" on the active project — see "Which
+project" above) and pin the rename behind a deprecation/cutover
+plan rather than landing it.
+
+For examples of pinned renames waiting on cutover, see #11
+(`release_stats/` rename) and #12 (`go-cams/index-json/` move).
+
+If the audit returns no external consumers, the rename is safe to
+land directly — see #13 (`reports/groups/`) and #14
+(`reports/go-rules/`) for examples.
 
 ## Jenkins CI
 
