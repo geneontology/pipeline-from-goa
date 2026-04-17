@@ -20,9 +20,32 @@ set -euo pipefail
 echo 'nameserver 8.8.8.8' > /etc/resolv.conf
 echo 'search lbl.gov' >> /etc/resolv.conf
 
+# Helper for retried apt-get install.
+#
+# archive.ubuntu.com is intermittently unreachable from this Jenkins
+# host; build #77 lost the GO-CAM processing stage at 05:08 UTC when
+# ~40 .deb fetches returned "Connection failed [IP: ... 80]". Same
+# family of Ubuntu Noble flakiness as the awscli pip-vs-apt switch
+# in commit e5a1f95 (issue #7); these system packages cannot move
+# to pip (git, openssh-client, graphviz/libgraphviz-dev), so retry
+# instead. Re-runs apt-get update between attempts in case the
+# package index itself drifted during a partial outage.
+apt_install_retry() {
+    local _i
+    for _i in 1 2 3; do
+        if DEBIAN_FRONTEND=noninteractive apt-get -y install "$@"; then
+            return 0
+        fi
+        echo "apt-get install attempt ${_i} failed; sleeping 30s before retry"
+        sleep 30
+        DEBIAN_FRONTEND=noninteractive apt-get update || true
+    done
+    return 1
+}
+
 # Install system dependencies.
 DEBIAN_FRONTEND=noninteractive apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-pip python3-venv git openssh-client wget graphviz libgraphviz-dev
+apt_install_retry python3 python3-pip python3-venv git openssh-client wget graphviz libgraphviz-dev
 
 # Install uv (not available in Ubuntu apt repos).
 pip3 install --break-system-packages uv
