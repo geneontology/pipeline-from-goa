@@ -2,20 +2,19 @@
 #
 # Populate the GOEx mirror.
 #
-# Best-effort: downloads all GOEx GAF files from the EBI FTP and
-# uploads them to s3://go-mirror/goex/current/gaf/, then invalidates
-# the corresponding CloudFront paths so the new content is visible
-# at https://mirror.geneontology.io/goex/current/gaf/.
+# Best-effort: mirrors a curated set of EBI GOEx subdirectories to
+# s3://go-mirror/goex/current/<subdir>/ and invalidates the
+# corresponding CloudFront paths so the new content is visible at
+# https://mirror.geneontology.io/goex/current/<subdir>/.
+#
+# Mirrored subdirectories (six in total):
+#   gaf/, gpad/, gpi/                        (MOD-id-space artifacts)
+#   uniprot-centric/{gaf,gpad,gpi}/          (UniProt-id-space artifacts)
 #
 # This script is invoked from a stage that wraps it in try/catch in
 # the Jenkinsfile, so a failure here is non-fatal -- the rest of
 # the pipeline will fall back to whatever is currently in the
 # mirror from the last successful populate run.
-#
-# Runs inside the ubuntu:noble container with /workspace mounted
-# from the Jenkins workspace (which has go-site cloned at
-# /workspace/go-site-for-mirror for download_goex_data.py and
-# its metadata/goex.yaml manifest).
 #
 # Required env vars:
 #   JENKINS_UID, JENKINS_GID
@@ -23,26 +22,53 @@
 #   GOEX_MIRROR_CLOUDFRONT_DISTRIBUTION_ID
 #
 # Required mounts:
-#   /workspace -- Jenkins workspace (with go-site cloned)
+#   /workspace -- Jenkins workspace
 
 # Note: not using `set -e` because we manage exit codes ourselves
 # inside the retry loop.
 set -uo pipefail
 
-LOCAL_DIR='/tmp/goex-mirror-staging'
-S3_DEST='s3://go-mirror/goex/current/gaf/'
-CF_INVALIDATE_PATH='/goex/current/gaf/*'
+EBI_BASE='https://ftp.ebi.ac.uk/pub/contrib/goa/goex/current'
+LOCAL_BASE='/tmp/goex-mirror-staging'
+S3_BASE='s3://go-mirror/goex/current'
 DOWNLOAD_ATTEMPTS=5
 DOWNLOAD_BACKOFF_SECONDS=60
+SANITY_MIN_CANONICAL_GAFS=100
+
+# Six EBI subdirectories to mirror, in walk order.
+MIRROR_PATHS=(
+    'gaf'
+    'gpad'
+    'gpi'
+    'uniprot-centric/gaf'
+    'uniprot-centric/gpad'
+    'uniprot-centric/gpi'
+)
 
 # WARNING: MEGAHACK -- the Jenkins host's docker network DNS is broken.
 echo 'nameserver 8.8.8.8' > /etc/resolv.conf
 echo 'search lbl.gov' >> /etc/resolv.conf
 
-# Install system dependencies. awscli was removed from Ubuntu
-# Noble's repos; install via pip instead.
+# Helper for retried apt-get install. Same pattern as
+# scripts/gocam-processing.sh -- archive.ubuntu.com is intermittently
+# unreachable from this Jenkins host.
+apt_install_retry() {
+    local _i
+    for _i in 1 2 3; do
+        if DEBIAN_FRONTEND=noninteractive apt-get -y install "$@"; then
+            return 0
+        fi
+        echo "apt-get install attempt ${_i} failed; sleeping 30s before retry"
+        sleep 30
+        DEBIAN_FRONTEND=noninteractive apt-get update || true
+    done
+    return 1
+}
+
+# Install system dependencies. awscli was removed from Ubuntu Noble's
+# repos; install via pip instead.
 DEBIAN_FRONTEND=noninteractive apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-pip python3-yaml
+apt_install_retry python3 python3-pip wget
 pip3 install --break-system-packages awscli
 
 # Create jenkins user matching host UID/GID.
@@ -51,54 +77,78 @@ useradd -u "$JENKINS_UID" -g "$JENKINS_GID" -m -s /bin/bash jenkins
 chown -R jenkins:jenkins /workspace
 chown jenkins:jenkins /tmp
 
-# Set up local download directory.
-mkdir -p "$LOCAL_DIR"
-chown -R jenkins:jenkins "$LOCAL_DIR"
+# Set up local staging tree.
+mkdir -p "$LOCAL_BASE"
+chown -R jenkins:jenkins "$LOCAL_BASE"
 
-cd /workspace/go-site-for-mirror || exit 1
-chown -R jenkins:jenkins .
+# Mirror one EBI subdirectory to a local staging directory using
+# wget. --timestamping skips files that haven't changed; -nc avoids
+# clobbering on retries; -nd flattens into the target so layout is
+# controlled by --directory-prefix.
+mirror_subdir() {
+    local sub="$1"
+    local target="${LOCAL_BASE}/${sub}"
+    local url="${EBI_BASE}/${sub}/"
 
-# Download all GOEx GAFs from EBI. download_goex_data.py is
-# incremental: each retry only re-attempts the files that are still
-# missing locally, so we get cheap progress on flaky connections.
-for n in $(seq 1 "$DOWNLOAD_ATTEMPTS"); do
-    echo "=== Download attempt $n of $DOWNLOAD_ATTEMPTS ==="
-    if su jenkins -c "python3 scripts/download_goex_data.py $LOCAL_DIR"; then
-        echo "Download succeeded on attempt $n."
-        break
-    fi
-    if [ "$n" -eq "$DOWNLOAD_ATTEMPTS" ]; then
-        echo "All $DOWNLOAD_ATTEMPTS download attempts failed. Aborting populate."
+    mkdir -p "$target"
+    chown -R jenkins:jenkins "$target"
+
+    local n
+    for n in $(seq 1 "$DOWNLOAD_ATTEMPTS"); do
+        echo "=== Mirror ${sub} attempt ${n} of ${DOWNLOAD_ATTEMPTS} ==="
+        if su jenkins -c "wget --quiet --tries=3 --timestamping --recursive --level=1 --no-parent --no-directories --no-host-directories --execute robots=off --reject 'index.html*,robots.txt' --directory-prefix='${target}' '${url}'"; then
+            echo "Mirror ${sub} succeeded on attempt ${n}."
+            return 0
+        fi
+        if [ "$n" -eq "$DOWNLOAD_ATTEMPTS" ]; then
+            echo "All ${DOWNLOAD_ATTEMPTS} mirror attempts for ${sub} failed."
+            return 1
+        fi
+        echo "Mirror ${sub} attempt ${n} failed. Sleeping ${DOWNLOAD_BACKOFF_SECONDS}s before retry."
+        sleep "$DOWNLOAD_BACKOFF_SECONDS"
+    done
+    return 1
+}
+
+for sub in "${MIRROR_PATHS[@]}"; do
+    if ! mirror_subdir "$sub"; then
+        echo "Aborting populate: could not mirror ${sub}."
         exit 1
     fi
-    echo "Download attempt $n failed. Sleeping ${DOWNLOAD_BACKOFF_SECONDS}s before retry."
-    sleep "$DOWNLOAD_BACKOFF_SECONDS"
 done
 
 # Sanity check: refuse to push a suspiciously empty cache to the
-# mirror, which would clobber a working state.
-file_count=$(find "$LOCAL_DIR" -name '*.gaf.gz' -type f | wc -l)
-echo "Downloaded $file_count GAF files to $LOCAL_DIR."
-if [ "$file_count" -lt 100 ]; then
-    echo "Refusing to sync: too few files ($file_count < 100). Mirror left untouched."
+# mirror, which would clobber a working state. The canonical gaf/
+# count is the most stable signal across releases.
+canonical_gaf_count=$(find "${LOCAL_BASE}/gaf" -name '*.gaf.gz' -type f | wc -l)
+echo "Downloaded ${canonical_gaf_count} canonical GAF files to ${LOCAL_BASE}/gaf."
+if [ "$canonical_gaf_count" -lt "$SANITY_MIN_CANONICAL_GAFS" ]; then
+    echo "Refusing to sync: too few canonical GAFs (${canonical_gaf_count} < ${SANITY_MIN_CANONICAL_GAFS}). Mirror left untouched."
     exit 1
 fi
 
-# Push to s3://go-mirror/goex/current/gaf/ with the official AWS CLI.
+# Push each mirrored subdir to its S3 destination.
 # `aws s3 sync` only uploads files where size or mtime differ.
-echo "Syncing $file_count files to $S3_DEST ..."
-aws s3 sync "$LOCAL_DIR/" "$S3_DEST" --no-progress
+for sub in "${MIRROR_PATHS[@]}"; do
+    src="${LOCAL_BASE}/${sub}/"
+    dest="${S3_BASE}/${sub}/"
+    echo "Syncing ${src} to ${dest} ..."
+    aws s3 sync "$src" "$dest" --no-progress
+done
 
-# Invalidate the CloudFront cache for the goex/gaf path so the
-# new content is visible at https://mirror.geneontology.io/...
+# Invalidate CloudFront for all mirrored paths in a single call.
 if [ -n "${GOEX_MIRROR_CLOUDFRONT_DISTRIBUTION_ID:-}" ] && \
-   [ "$GOEX_MIRROR_CLOUDFRONT_DISTRIBUTION_ID" != "null" ]; then
-    echo "Invalidating CloudFront paths $CF_INVALIDATE_PATH ..."
+   [ "$GOEX_MIRROR_CLOUDFRONT_DISTRIBUTION_ID" != 'null' ]; then
+    invalidation_paths=()
+    for sub in "${MIRROR_PATHS[@]}"; do
+        invalidation_paths+=("/goex/current/${sub}/*")
+    done
+    echo "Invalidating CloudFront paths: ${invalidation_paths[*]}"
     aws cloudfront create-invalidation \
         --distribution-id "$GOEX_MIRROR_CLOUDFRONT_DISTRIBUTION_ID" \
-        --paths "$CF_INVALIDATE_PATH"
+        --paths "${invalidation_paths[@]}"
 else
-    echo "GOEX_MIRROR_CLOUDFRONT_DISTRIBUTION_ID not set; skipping invalidation."
+    echo 'GOEX_MIRROR_CLOUDFRONT_DISTRIBUTION_ID not set; skipping invalidation.'
 fi
 
-echo "Mirror populate complete."
+echo 'Mirror populate complete.'
