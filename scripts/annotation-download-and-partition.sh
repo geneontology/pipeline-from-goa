@@ -40,19 +40,19 @@
 
 set -euo pipefail
 
-MIRROR_BASE='https://mirror.geneontology.io/goex/current'
-# Each entry pairs an EBI subdirectory with the file extension it
-# contains (sans leading dot). Used to drive download_goex_files.py
-# below for explicit per-organism fetches -- the mirror (CloudFront
-# in front of S3) does not serve directory listings, so wget
-# --recursive cannot walk it. Filename construction is goex.yaml-driven.
+# Read directly from the S3 bucket that the Populate GOEx mirror
+# stage writes to, rather than going through the CloudFront-fronted
+# https://mirror.geneontology.io/ (which does not serve directory
+# listings and so cannot be walked). aws s3 sync handles listing
+# and skip-existing for us.
+S3_MIRROR='s3://go-mirror/goex/current'
 SUBDIRS=(
-    'gaf:gaf.gz'
-    'gpad:gpa.gz'
-    'gpi:gpi.gz'
-    'uniprot-centric/gaf:gaf.gz'
-    'uniprot-centric/gpad:gpa.gz'
-    'uniprot-centric/gpi:gpi.gz'
+    'gaf'
+    'gpad'
+    'gpi'
+    'uniprot-centric/gaf'
+    'uniprot-centric/gpad'
+    'uniprot-centric/gpi'
 )
 DOWNLOAD_BASE='/tmp/goex-download'
 STAGED_BASE='/tmp/goex-staged'
@@ -78,9 +78,11 @@ apt_install_retry() {
     return 1
 }
 
-# Install system dependencies.
+# Install system dependencies. awscli is installed via pip because
+# Ubuntu Noble dropped it from apt (see issue #7's e5a1f95 fix).
 DEBIAN_FRONTEND=noninteractive apt-get update
-apt_install_retry python3 python3-yaml openssh-client rsync s3cmd wget
+apt_install_retry python3 python3-pip python3-yaml openssh-client rsync s3cmd
+pip3 install --break-system-packages awscli
 
 # Create jenkins user matching host UID/GID.
 groupadd -g "$JENKINS_GID" jenkins || true
@@ -96,35 +98,20 @@ chmod 0600 /home/jenkins/.skyhook_key
 cd /workspace/go-site
 chown -R jenkins:jenkins .
 
-# Fetch the Python helper from the same branch as this script.
-# The Jenkinsfile only curls the top-level stage script (us); we
-# fetch dependent helpers inline so Restart-from-Stage iterations
-# pick up changes to either without needing a Jenkinsfile change.
-# Falls back to main if BRANCH_NAME is not exported into the
-# container (the current Jenkinsfile does not pass it).
-helper_branch="${BRANCH_NAME:-main}"
-mkdir -p /workspace/scripts
-curl -fsSL "https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${helper_branch}/scripts/download_goex_files.py" -o /workspace/scripts/download_goex_files.py
-chmod +x /workspace/scripts/download_goex_files.py
-chown jenkins:jenkins /workspace/scripts/download_goex_files.py
-
-# Download every mirrored EBI subdir into a parallel local tree.
-# Use download_goex_files.py for explicit per-organism fetches
-# driven by goex.yaml -- the mirror does not serve directory
-# listings, so a recursive walk is not possible.
+# Sync each mirrored EBI subdir down from S3 into a parallel local
+# tree. We do this as root (no need to drop privileges for read-only
+# downloads), then chown for the rest of the pipeline.
 mkdir -p "$DOWNLOAD_BASE"
-chown -R jenkins:jenkins "$DOWNLOAD_BASE"
 
-for entry in "${SUBDIRS[@]}"; do
-    sub="${entry%%:*}"
-    ext="${entry##*:}"
+for sub in "${SUBDIRS[@]}"; do
     target="${DOWNLOAD_BASE}/${sub}"
-    url="${MIRROR_BASE}/${sub}/"
+    src="${S3_MIRROR}/${sub}/"
     mkdir -p "$target"
-    chown -R jenkins:jenkins "$target"
-    echo "=== Downloading ${url} (.${ext}) -> ${target} ==="
-    su jenkins -c "python3 /workspace/scripts/download_goex_files.py --base-url '${url}' --extension '${ext}' '${target}'"
+    echo "=== Syncing ${src} -> ${target} ==="
+    aws s3 sync "$src" "${target}/" --no-progress
 done
+
+chown -R jenkins:jenkins "$DOWNLOAD_BASE"
 
 # Read goex.yaml to get the MOD-centric mnemonic set: any organism
 # whose `group` is not 'UniProt' is MOD-managed.
