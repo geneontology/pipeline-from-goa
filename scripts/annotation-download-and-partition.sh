@@ -41,13 +41,18 @@
 set -euo pipefail
 
 MIRROR_BASE='https://mirror.geneontology.io/goex/current'
-EBI_SUBDIRS=(
-    'gaf'
-    'gpad'
-    'gpi'
-    'uniprot-centric/gaf'
-    'uniprot-centric/gpad'
-    'uniprot-centric/gpi'
+# Each entry pairs an EBI subdirectory with the file extension it
+# contains (sans leading dot). Used to drive download_goex_files.py
+# below for explicit per-organism fetches -- the mirror (CloudFront
+# in front of S3) does not serve directory listings, so wget
+# --recursive cannot walk it. Filename construction is goex.yaml-driven.
+SUBDIRS=(
+    'gaf:gaf.gz'
+    'gpad:gpa.gz'
+    'gpi:gpi.gz'
+    'uniprot-centric/gaf:gaf.gz'
+    'uniprot-centric/gpad:gpa.gz'
+    'uniprot-centric/gpi:gpi.gz'
 )
 DOWNLOAD_BASE='/tmp/goex-download'
 STAGED_BASE='/tmp/goex-staged'
@@ -91,17 +96,34 @@ chmod 0600 /home/jenkins/.skyhook_key
 cd /workspace/go-site
 chown -R jenkins:jenkins .
 
+# Fetch the Python helper from the same branch as this script.
+# The Jenkinsfile only curls the top-level stage script (us); we
+# fetch dependent helpers inline so Restart-from-Stage iterations
+# pick up changes to either without needing a Jenkinsfile change.
+# Falls back to main if BRANCH_NAME is not exported into the
+# container (the current Jenkinsfile does not pass it).
+helper_branch="${BRANCH_NAME:-main}"
+mkdir -p /workspace/scripts
+curl -fsSL "https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${helper_branch}/scripts/download_goex_files.py" -o /workspace/scripts/download_goex_files.py
+chmod +x /workspace/scripts/download_goex_files.py
+chown jenkins:jenkins /workspace/scripts/download_goex_files.py
+
 # Download every mirrored EBI subdir into a parallel local tree.
+# Use download_goex_files.py for explicit per-organism fetches
+# driven by goex.yaml -- the mirror does not serve directory
+# listings, so a recursive walk is not possible.
 mkdir -p "$DOWNLOAD_BASE"
 chown -R jenkins:jenkins "$DOWNLOAD_BASE"
 
-for sub in "${EBI_SUBDIRS[@]}"; do
+for entry in "${SUBDIRS[@]}"; do
+    sub="${entry%%:*}"
+    ext="${entry##*:}"
     target="${DOWNLOAD_BASE}/${sub}"
     url="${MIRROR_BASE}/${sub}/"
     mkdir -p "$target"
     chown -R jenkins:jenkins "$target"
-    echo "=== Downloading ${url} -> ${target} ==="
-    su jenkins -c "wget --quiet --tries=3 --recursive --level=1 --no-parent --no-directories --no-host-directories --execute robots=off --reject 'index.html*,robots.txt' --directory-prefix='${target}' '${url}'"
+    echo "=== Downloading ${url} (.${ext}) -> ${target} ==="
+    su jenkins -c "python3 /workspace/scripts/download_goex_files.py --base-url '${url}' --extension '${ext}' '${target}'"
 done
 
 # Read goex.yaml to get the MOD-centric mnemonic set: any organism
