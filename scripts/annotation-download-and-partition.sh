@@ -2,26 +2,25 @@
 #
 # Annotation download, restructure, and partition stage.
 #
-# Mirrors the GOEx annotation set (GAF, GPAD, GPI in both MOD-id-space
-# and UniProt-id-space) from the GOEx mirror at
-# https://mirror.geneontology.io/goex/current/, restructures into the
-# pipeline-from-goa output layout (see below), and partitions the
-# canonical GAF set into the union-* files used for downstream
-# indexing.
+# Syncs the GOEx annotation set (GAF, GPAD, GPI in both MOD-id-space
+# and UniProt-id-space) from the GOEx mirror S3 bucket
+# (s3://go-mirror/goex/current/), restructures into the
+# pipeline-from-goa output layout, and partitions the canonical
+# GAF set into the union-* files used for downstream indexing.
 #
 # Output layout on skyhook:
-#   annotations/gaf/mod-centric/MNEMONIC.gaf.gz                (~23 organisms)
-#   annotations/gaf/uniprot-centric/MNEMONIC-uniprot.gaf.gz    (171 organisms)
-#   internal/gpad-gpi/mod-centric/MNEMONIC.gpad.gz             (~23 organisms)
-#   internal/gpad-gpi/mod-centric/MNEMONIC.gpi.gz              (~23 organisms)
-#   internal/gpad-gpi/uniprot-centric/MNEMONIC-uniprot.gpad.gz (171 organisms)
-#   internal/gpad-gpi/uniprot-centric/MNEMONIC-uniprot.gpi.gz  (171 organisms)
-#   internal/union-gaf-partitions/union_*.gaf.gz               (10 partitions)
+#   annotations/gaf/MNEMONIC-mod.gaf.gz       (~23 MOD-managed organisms)
+#   annotations/gaf/MNEMONIC-uniprot.gaf.gz   (all 171 organisms)
+#   annotations/gpad/MNEMONIC-mod.gpad.gz     (~23)
+#   annotations/gpad/MNEMONIC-uniprot.gpad.gz (171)
+#   annotations/gpi/MNEMONIC-mod.gpi.gz       (~23)
+#   annotations/gpi/MNEMONIC-uniprot.gpi.gz   (171)
+#   internal/union-gaf-partitions/union_*.gaf.gz  (10 partitions)
 #
 # The mod-centric filter is driven by goex.yaml: any organism whose
-# `group` is not 'UniProt' gets a mod-centric file (in addition to its
-# uniprot-centric file). The other ~148 UniProt-managed organisms
-# only appear in the uniprot-centric output.
+# `group` is not 'UniProt' gets a -mod file (in addition to its
+# -uniprot file). The other ~148 UniProt-managed organisms only
+# appear with a -uniprot file.
 #
 # EBI's `.gpa.gz` extension is normalized to `.gpad.gz` on landing.
 #
@@ -125,14 +124,14 @@ print(\"\n\".join(codes))
 mod_count=$(wc -l < "$mod_mnemonics_file")
 echo "Identified ${mod_count} MOD-managed organisms from goex.yaml."
 
-# Stage renamed files into a layout that mirrors the skyhook target.
-# uniprot-centric: every file, with -uniprot suffix; gpa.gz -> gpad.gz.
-# mod-centric: only mnemonics in the MOD set, no suffix; gpa.gz -> gpad.gz.
+# Stage renamed files into a layout that mirrors the skyhook target:
+# a flat dir per format under annotations/, with -mod or -uniprot
+# suffix encoding the ID space. EBI's .gpa.gz is normalized to
+# .gpad.gz on the way in.
 mkdir -p \
-    "${STAGED_BASE}/annotations/gaf/mod-centric" \
-    "${STAGED_BASE}/annotations/gaf/uniprot-centric" \
-    "${STAGED_BASE}/internal/gpad-gpi/mod-centric" \
-    "${STAGED_BASE}/internal/gpad-gpi/uniprot-centric"
+    "${STAGED_BASE}/annotations/gaf" \
+    "${STAGED_BASE}/annotations/gpad" \
+    "${STAGED_BASE}/annotations/gpi"
 
 # Map a downloaded file's MNEMONIC by stripping at the first underscore.
 mnemonic_of() {
@@ -147,15 +146,12 @@ normalized_ext() {
     esac
 }
 
-# Stage uniprot-centric (all 171 organisms).
-for sub in 'uniprot-centric/gaf:gaf' 'uniprot-centric/gpad:gpa' 'uniprot-centric/gpi:gpi'; do
-    src_sub="${sub%%:*}"
-    ext="${sub##*:}"
+# Stage uniprot-centric files (all 171 organisms, -uniprot suffix).
+for entry in 'uniprot-centric/gaf:gaf' 'uniprot-centric/gpad:gpa' 'uniprot-centric/gpi:gpi'; do
+    src_sub="${entry%%:*}"
+    ext="${entry##*:}"
     out_ext=$(normalized_ext "$ext")
-    case "$src_sub" in
-        */gaf) staged_dir="${STAGED_BASE}/annotations/gaf/uniprot-centric" ;;
-        *)     staged_dir="${STAGED_BASE}/internal/gpad-gpi/uniprot-centric" ;;
-    esac
+    staged_dir="${STAGED_BASE}/annotations/${out_ext}"
     for src in "${DOWNLOAD_BASE}/${src_sub}"/*."${ext}.gz"; do
         [ -e "$src" ] || continue
         mnem=$(mnemonic_of "$src")
@@ -163,20 +159,17 @@ for sub in 'uniprot-centric/gaf:gaf' 'uniprot-centric/gpad:gpa' 'uniprot-centric
     done
 done
 
-# Stage mod-centric (filtered to MOD-managed organisms only).
-for sub in 'gaf:gaf' 'gpad:gpa' 'gpi:gpi'; do
-    src_sub="${sub%%:*}"
-    ext="${sub##*:}"
+# Stage mod-centric files (filtered to MOD-managed organisms, -mod suffix).
+for entry in 'gaf:gaf' 'gpad:gpa' 'gpi:gpi'; do
+    src_sub="${entry%%:*}"
+    ext="${entry##*:}"
     out_ext=$(normalized_ext "$ext")
-    case "$src_sub" in
-        gaf) staged_dir="${STAGED_BASE}/annotations/gaf/mod-centric" ;;
-        *)   staged_dir="${STAGED_BASE}/internal/gpad-gpi/mod-centric" ;;
-    esac
+    staged_dir="${STAGED_BASE}/annotations/${out_ext}"
     for src in "${DOWNLOAD_BASE}/${src_sub}"/*."${ext}.gz"; do
         [ -e "$src" ] || continue
         mnem=$(mnemonic_of "$src")
         if grep -qx "$mnem" "$mod_mnemonics_file"; then
-            cp "$src" "${staged_dir}/${mnem}.${out_ext}.gz"
+            cp "$src" "${staged_dir}/${mnem}-mod.${out_ext}.gz"
         fi
     done
 done
@@ -186,10 +179,9 @@ chown -R jenkins:jenkins "$STAGED_BASE"
 # Quick visibility into what we're about to ship.
 echo '=== Staged file counts ==='
 for d in \
-    "${STAGED_BASE}/annotations/gaf/mod-centric" \
-    "${STAGED_BASE}/annotations/gaf/uniprot-centric" \
-    "${STAGED_BASE}/internal/gpad-gpi/mod-centric" \
-    "${STAGED_BASE}/internal/gpad-gpi/uniprot-centric" \
+    "${STAGED_BASE}/annotations/gaf" \
+    "${STAGED_BASE}/annotations/gpad" \
+    "${STAGED_BASE}/annotations/gpi" \
     ; do
     printf '%-60s %5d\n' "$d" "$(find "$d" -type f | wc -l)"
 done
@@ -210,11 +202,10 @@ rsync_retry() {
     return 1
 }
 
-# Upload to skyhook in the structured layout.
-rsync_retry "${STAGED_BASE}/annotations/gaf/mod-centric/"        "${SKYHOOK_MAIN}/annotations/gaf/mod-centric/"
-rsync_retry "${STAGED_BASE}/annotations/gaf/uniprot-centric/"    "${SKYHOOK_MAIN}/annotations/gaf/uniprot-centric/"
-rsync_retry "${STAGED_BASE}/internal/gpad-gpi/mod-centric/"      "${SKYHOOK_MAIN}/internal/gpad-gpi/mod-centric/"
-rsync_retry "${STAGED_BASE}/internal/gpad-gpi/uniprot-centric/"  "${SKYHOOK_MAIN}/internal/gpad-gpi/uniprot-centric/"
+# Upload to skyhook in the new layout: three flat format dirs.
+rsync_retry "${STAGED_BASE}/annotations/gaf/"   "${SKYHOOK_MAIN}/annotations/gaf/"
+rsync_retry "${STAGED_BASE}/annotations/gpad/"  "${SKYHOOK_MAIN}/annotations/gpad/"
+rsync_retry "${STAGED_BASE}/annotations/gpi/"   "${SKYHOOK_MAIN}/annotations/gpi/"
 
 # Partition the canonical GAF set into union-* files for downstream
 # indexing. Source is the mod-centric (top-level) GAF set, matching
