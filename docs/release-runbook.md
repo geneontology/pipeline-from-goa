@@ -56,7 +56,14 @@ the `current` (and dated `release`) locations.
 - `release_stats/` via go-stats. ✅
 - GO-CAM processing (json, index-json, search-docs, reports). ✅
 - `internal/` all-GO-CAM products. ✅
-- Not reproduced: `products/{blazegraph,gaferencer,ttl,upstream_and_raw_data,pages}/`. ⚰️
+- Downloads page `products/pages/downloads.html` via go-site
+  `scripts/downloads-page-gen.py` + `downloads-page-template.html` — fold in
+  (actively maintained upstream: go-site #2518, geneontology/pipeline #406). 🔨
+  - Input contract: a combined per-dataset report JSON with `associations` counts,
+    `metadata.species_code`, and `paint_*` entries (old `combined.report.json`),
+    rendered with `--report`/`--date`/`--inject`, printed to stdout. New input
+    source is **TBD** given GOEx proteome-named annotations — resolve before wiring.
+- Not reproduced: `products/{blazegraph,gaferencer,ttl,upstream_and_raw_data}/`. ⚰️
 - Loose ends: `MINERVA_JSON_TARBALL_URL` and the reacto-neo journal are still pulled
   from `current.geneontology.org` / `skyhook.berkeleybop.org` (self/legacy references
   to repoint once we are the source). 🟡
