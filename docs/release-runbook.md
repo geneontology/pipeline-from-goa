@@ -1,0 +1,132 @@
+# Release runbook — pipeline-from-goa
+
+Start-to-sign-off overview of a GO data release built from the
+`pipeline-from-goa` pipeline. This is the new-world analog of
+`geneontology/operations` `README.pipeline-finalization.md`, covering
+the whole lifecycle: from kicking off a `main` run to signing off on
+the published release.
+
+It is deliberately **complete**, not just "what runs here" — steps that
+live in `operations`, in downstream apps, or with a person are on the
+list too, so the whole board is visible and we can migrate items into
+the pipeline as they become automatable.
+
+## Release model
+
+`main` is the **sole** pipeline. Its products on
+`skyhook.geneontology.io/pipeline-from-goa/main/` are the canonical
+tree. A *release* is that tree being **"blessed"** — published — into
+the `current` (and dated `release`) locations.
+
+- There is **no** `release` branch and **no** snapshot→release tree
+  copy. The old pipeline's four-branch dance (`snapshot` →
+  `snapshot-post-fail` → `snapshot-post-post-fail` → `release`) existed
+  only as a manual Restart-from-Stage recovery harness for a long,
+  non-resumable run; pre-QCed inputs from GOEx make it unnecessary.
+- Because inputs arrive pre-QCed, the heavy QA/QC and product-rebuild
+  front half is upstream; our job is acquire → derive → publish.
+
+## Legend
+
+| Mark | Meaning |
+|------|---------|
+| ✅ | Automated now (pipeline-from-goa `main`) |
+| 🟡 | Partial / needs finishing |
+| 🔨 | To build **in this pipeline** (the publish/archive tail) |
+| 🔧 | `operations` repo / ansible — separate, but tracked here |
+| 👤 | External app / human step (other repos / people) |
+| ⚰️ | Legacy — not reproduced (being decommissioned) |
+| 🧊 | Pinned cross-repo cutover (tracked issue) |
+
+## Phase 0 — Trigger & run identity
+- Kick off `main` (cron + manual). ✅ *(cron is the Feb-31 never-fires stub; real schedule TBD)*
+- Pin date/day; write `metadata/{date,dow}.txt`, `release-date.json`, `summary.txt`. ✅
+  - `summary.txt` still has a "TODO: note software versions". 🟡
+
+## Phase 1 — Acquire pre-QCed inputs from GOEx
+- Populate GOEx mirror S3 buffer (#7). ✅
+- Ontology → skyhook. ✅
+- Annotations download + partition (mod/uniprot, `union_*`). ✅
+- QC reports (groups / go-rules split). ✅
+- Metadata + `annotations/README.txt`. ✅
+- PANTHER `arbre.tgz`. ✅
+
+## Phase 2 — Derive products
+- Solr index `golr-index-contents.tgz` + timestamp + release-only Solr sanity gate. ✅
+- `release_stats/` via go-stats. ✅
+- GO-CAM processing (json, index-json, search-docs, reports). ✅
+- `internal/` all-GO-CAM products. ✅
+- Not reproduced: `products/{blazegraph,gaferencer,ttl,upstream_and_raw_data,pages}/`. ⚰️
+- Loose ends: `MINERVA_JSON_TARBALL_URL` and the reacto-neo journal are still pulled
+  from `current.geneontology.org` / `skyhook.berkeleybop.org` (self/legacy references
+  to repoint once we are the source). 🟡
+
+## Phase 3 — Pre-release QC / readiness
+- Consolidated run-error surface (the "grep exception" readiness signal). 🔨🟡
+- Files-in-expected-locations / parity check (#3). 🟡
+- Human approval / wait gate — deferred for now, add later. 🔨(later)
+
+## Phase 4 — Bless → Archive (mint the DOI first)
+- Build the release archive tarball from the skyhook `main` tree. 🔨
+- Zenodo versioned push → **mint DOI** (reuse `go-site/scripts/zenodo-version-update.py`;
+  concept ID TBD). DOI is minted **first** so it can be referenced elsewhere. 🔨
+- Write `metadata/release-archive-doi.json` back into the tree (it travels *in* the
+  published products). 🔨
+- BDBag remote-file manifest — optional, was in old Archive. 🔨(optional)
+
+## Phase 5 — Bless → Publish (make it current)
+
+Authoritative ordering (Zenodo already done in Phase 4):
+
+1. Copy tree → **`go-data-product-release`** (dated, e.g. `/$DATE`) + build indexes. 🔨
+2. Copy tree → **`go-data-product-current`** + build indexes. 🔨
+3. **CloudFront invalidation** — current **E3Q4YIZHZL7358**, release **E2HF1DWYYDLTQP**. 🔨
+
+Details / dependencies:
+- Index generation reuses the existing go-site tools as-is: `directory_indexer.py`
+  (per-dir `index.html`, needs `-x`), `bucket-indexer.py` (release-bucket top-level
+  `index.html`). Acknowledged as not ideal; kept for now.
+- Set **Cache-Control** on upload (#9).
+- Pinned renames to land at/with cutover: `release_stats/` #11 🧊,
+  `go-cams/index-json/` #12 🧊.
+- Switchover timing — when `pipeline-from-goa` takes over populating `current` (#1). (decision)
+- Announcement of file name/location changes (#16). 👤
+
+## Phase 6 — Deploy data services *(separate — likely in `operations`, tracked here)*
+- golr prod — `update-golr.yaml -e target_host=amigo-golr-production` (→ grill.lbl.gov). 🔧
+  - Reads input over HTTP from `current.geneontology.org/products/solr/` + the DOI JSON,
+    so it works unchanged once Phase 5 lands those.
+- amigo prod app — `amigo-golr-up-production.yml`. 🔧
+- go-fastapi index-json config cutover (#12; both `app/conf/config.yaml` and the
+  provision template). 👤🧊
+- ~~sparql / `rdf.geneontology.org` prod / graphstore / Cloudflare DNS~~ — ⚰️ legacy,
+  decommissioning; no outward-facing Blazegraph concern. (Blazegraph may persist
+  internally with Minerva — not the pipeline's concern.)
+
+## Phase 7 — Downstream app releases *(external / human)*
+- go-cam-browser "ping patrick": regenerate committed `public/data.json` →
+  `data-release-YYYY-MM-DD` branch → merge → GitHub Pages auto-deploy. 👤
+- amigo / metadata **npm** packages. 👤
+- Confirm GO API product switch. 👤
+
+## Phase 8 — Sign-off
+- Success/failure notifications (`post{}` emails). ✅(basic)
+- Release notes (`go-site/releases/$DATE`). 👤
+- Inform pipeline channel (Suzi / Pascale). 👤
+- Final smoke checks — `current` up, golr/amigo serving new data, DOI resolves. 🟡
+
+## Cross-cutting tracking issues
+- #1 — assemble full pipeline / switchover timing
+- #2 — OWLTools file-access bug
+- #3 — files in expected locations (parity)
+- #9 — Cache-Control on published S3 objects
+- #11 — `release_stats/` rename (pinned cutover) 🧊
+- #12 — `go-cams/index-json/` move (pinned cutover) 🧊
+- #16 — announcement of file name/location changes
+
+## What's actually left to build here
+
+The only net-new pipeline code is **Phase 4 (Archive)** and **Phase 5
+(Publish)**. Phase 6 mostly falls out for free once Publish populates
+`current.geneontology.org`. Build order: Publish → Archive → (optional)
+Deploy hooks.
