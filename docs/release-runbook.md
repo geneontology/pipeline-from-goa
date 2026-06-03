@@ -26,6 +26,37 @@ the `current` (and dated `release`) locations.
 - Because inputs arrive pre-QCed, the heavy QA/QC and product-rebuild
   front half is upstream; our job is acquire → derive → publish.
 
+## Definition of done (mechanical)
+
+A release is **mechanically complete** when the file/computer-level state below
+holds. Human sign-off / community announcement and explicit verification are
+deliberately **out of scope of this definition** — they're lifecycle context in
+the phases below, not done-criteria.
+
+1. **All desired files are safely:**
+   - **in Zenodo** — the DOIed reproducibility subset, across **one or more
+     records** (≥1). Currently split into a "main" record + a "products" record
+     because the main archive grew too large to upload reliably (see Zenodo
+     upload-size tickets); the record count for the expanded GOEx set is **TBD /
+     actively being worked**.
+   - **in `current.geneontology.org`** (bucket `go-data-product-current`).
+   - **in `release.geneontology.org/XXXX-YY-ZZ`** (bucket
+     `go-data-product-release`, dated).
+2. **Downloads page produced and deployed to the main website.** Deploy target
+   **not yet decided** — a `current.geneontology.org/products/pages/` product vs a
+   commit into `geneontology.github.io` (its history touches
+   geneontology.github.io#491).
+3. **Data products for external interfaces are in place, and any necessary
+   service updates/restarts are done** for:
+   - **amigo / golr**
+   - **go api** — a normal release is picked up by **restarting** go-fastapi: it
+     caches the GO-CAM `index-json` once per process and re-fetches on restart
+     (go-fastapi #160 / commit `702b83f`). A config change is a one-time event
+     only at the #12 path rename, not every release.
+   - **go-cam-browser**
+4. **Necessary npm packages updated** (likely amigo / dbxrefs).
+5. **Release notes** — only when there is a change or error.
+
 ## Legend
 
 | Mark | Meaning |
@@ -104,8 +135,11 @@ Details / dependencies:
   - Reads input over HTTP from `current.geneontology.org/products/solr/` + the DOI JSON,
     so it works unchanged once Phase 5 lands those.
 - amigo prod app — `amigo-golr-up-production.yml`. 🔧
-- go-fastapi index-json config cutover (#12; both `app/conf/config.yaml` and the
-  provision template). 👤🧊
+- go api (go-fastapi): a normal release is picked up by **restarting** the
+  service — it caches the GO-CAM `index-json` once per process and re-fetches on
+  restart (go-fastapi #160 / commit `702b83f`). A config change
+  (`app/conf/config.yaml` + provision template) is needed only at the one-time
+  `index-json` path-rename cutover (#12), not every release. 🔧🧊
 - ~~sparql / `rdf.geneontology.org` prod / graphstore / Cloudflare DNS~~ — ⚰️ legacy,
   decommissioning; no outward-facing Blazegraph concern. (Blazegraph may persist
   internally with Minerva — not the pipeline's concern.)
