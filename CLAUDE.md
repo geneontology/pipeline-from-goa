@@ -1,5 +1,56 @@
 # Pipeline-from-GOA
 
+## Release model and lifecycle
+
+`main` is the **sole** pipeline. Its products on
+`skyhook.geneontology.io/pipeline-from-goa/main/` are the canonical
+tree; a *release* is that tree being **"blessed"** (published) into the
+`current` and dated `release` locations. There is **no** `release`
+branch and **no** snapshot→release tree copy — do not recreate the old
+`geneontology/pipeline` four-branch dance (`snapshot` →
+`snapshot-post-fail` → `snapshot-post-post-fail` → `release`). That
+split only existed as a manual Restart-from-Stage recovery harness for a
+long, non-resumable run; pre-QCed GOEx inputs make it unnecessary.
+
+The full start-to-sign-off lifecycle — what's automated, what's still to
+build, what lives in `operations`, what's external or legacy — is mapped
+in **`docs/release-runbook.md`**. Read it before working on the
+publish/archive tail, and keep it current as the source of truth.
+
+Facts that shape the work (so they aren't relearned):
+
+- **The pipeline has two halves: build all products, then make them
+  public.** "Bless" is the trigger between them. The build half (acquire
+  pre-QCed GOEx inputs → derive products → skyhook) is automated; the
+  publish/archive tail (Phases 4–5 of the runbook) is the remaining
+  net-new work. The bless *trigger mechanism* is intentionally undecided.
+- **Bless ordering is fixed:** Zenodo push to mint the DOI **first** (so
+  it can be referenced and written into
+  `metadata/release-archive-doi.json`), then copy the tree to
+  `go-data-product-release` (dated), then `go-data-product-current`,
+  then CloudFront invalidation. IDs: current = `go-data-product-current`
+  / CloudFront `E3Q4YIZHZL7358`; release = `go-data-product-release` /
+  `E2HF1DWYYDLTQP`. (Canonical bucket↔distribution table lives in
+  `geneontology/operations` `CLAUDE.md`.)
+- **Deploys read from `current`, not skyhook.** The `operations` ansible
+  (`update-golr.yaml`, `amigo-golr-up-production.yml`) pulls input over
+  HTTP from `current.geneontology.org/products/...`, so publishing to
+  `go-data-product-current` is what unblocks golr/amigo deploy. Those
+  steps stay in `operations`, not this pipeline (but track them).
+- **Out of scope / legacy:** `rdf.geneontology.org` / production
+  Blazegraph journal / graphstore rebuild are being decommissioned — no
+  outward-facing concern. Do **not** add Blazegraph product generation.
+- **External, not pipeline-automatable:** the go-cam-browser data
+  release (regenerate + commit `public/data.json` — the "ping patrick"
+  step) and amigo/metadata npm publishes live in other repos and require
+  a human.
+- **Publish/index tooling is reused from `go-site/scripts/`**
+  (`directory_indexer.py`, `s3-uploader.py`, `bucket-indexer.py`,
+  `zenodo-version-update.py`) — don't reinvent it. `downloads-page-gen.py`
+  still needs folding in, but its input is the old `combined.report.json`
+  contract (per-dataset counts + species codes), which has no obvious
+  source yet under GOEx proteome-named annotations.
+
 ## Issue and commit hygiene
 
 Every commit and PR must reference a GitHub issue. Every issue must
