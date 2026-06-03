@@ -572,6 +572,28 @@ pipeline {
 			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
 		    }
 
+		    // Fetch the in-container script fresh from the
+		    // current branch on GitHub (cheap to iterate via
+		    // Restart from Stage once this stage exists).
+		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/produce-metadata-derivatives.sh -o ./scripts/produce-metadata-derivatives.sh"
+
+		    // Generate the derived metadata files (db-xrefs.json,
+		    // db-xrefs.legacy, GO.xrf_abbs, eco-usage-constraints.json,
+		    // groups.ttl, users.ttl) INTO the go-site-for-metadata
+		    // checkout so the rsync below ships them alongside the
+		    // source YAML. Generation is offline -- no credentials.
+		    sh """
+			docker run --rm \\
+			  --init \\
+			  --mount type=tmpfs,destination=/tmp \\
+			  -u root:root \\
+			  -v "\$WORKSPACE":/workspace \\
+			  -e JENKINS_UID="\$JENKINS_UID" \\
+			  -e JENKINS_GID="\$JENKINS_GID" \\
+			  ubuntu:noble \\
+			  bash /workspace/scripts/produce-metadata-derivatives.sh
+		    """
+
 		    // Download annotation README from go-site.
 		    sh 'wget -N https://raw.githubusercontent.com/geneontology/go-site/$TARGET_GO_SITE_BRANCH/static/pages/README-annotation-downloads.txt'
 
