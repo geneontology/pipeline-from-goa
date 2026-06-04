@@ -52,6 +52,33 @@ Facts that shape the work (so they aren't relearned):
   tracked at pipeline#396 — do not add a downloads-page generator here. (The
   go-site `downloads-page-gen.py` is superseded.)
 
+## Data provenance
+
+Every input this pipeline consumes must come from exactly one of:
+
+1. **GOA upstream** (EBI GOEx), sometimes via our `go-mirror` S3 buffer —
+   annotations, ontology, QC reports.
+2. **Produced within the pipeline** from (1) or (3).
+3. **Grabbed at the moment of run from a canonical GO git repo** — `go-site`
+   metadata, and `geneontology/noctua-models` for GO-CAM curation data.
+
+Do **not** read pipeline inputs from another of our serving sites/product
+endpoints — `current.geneontology.org`, `snapshot.geneontology.org`,
+`go-data-product-live-go-cam`, legacy `skyhook.berkeleybop.org`, etc. Those run
+on their own cadences/procedures that need not line up with this release run, so
+depending on them makes the release non-reproducible.
+
+**GO-CAM data specifically:** lock all in-house GO-CAM data in place with a
+**single grab of `geneontology/noctua-models`** at run start (pin the ref), and
+derive everything from that one snapshot — the Minerva JSON dump
+(`products/json/noctua-models-json.tgz`), the true-GO-CAM products, the
+`go-cams/index-json/` API indexes (go-fastapi), and the GO-CAM Browser search
+docs. Known violations still to fix: `gocam-processing.sh` reads the Minerva
+tarball + `go.obo`/`groups.yaml` from `current`; `internal-all-gocam-products.sh`
+reads `ttl/` from `go-data-product-live-go-cam` and the reacto-neo journal from
+legacy skyhook. (Softer case: go-stats reads the *prior* release's stats from
+`current`/`snapshot` for diffing — our own prior output, decision pending.)
+
 ## Issue and commit hygiene
 
 Every commit and PR must reference a GitHub issue. Every issue must
