@@ -8,7 +8,9 @@
 # Required env vars:
 #   JENKINS_UID, JENKINS_GID
 #   SKYHOOK_MACHINE
-#   MINERVA_JSON_TARBALL_URL
+#   MINERVA_JSON_TARBALL_URL  (our own in-pipeline products/json/noctua-models-json.tgz,
+#                              produced by the internal/GO-CAM-base stage that runs first)
+#   TARGET_GO_SITE_BRANCH
 #
 # Required mounts:
 #   /workspace -- Jenkins workspace (with gocam-py checked out)
@@ -75,10 +77,11 @@ su jenkins -c 'mkdir -p /tmp/gocam-work/input /tmp/gocam-work/01-gocam-models /t
 su jenkins -c "wget -q -O /tmp/gocam-work/minerva-models.tar.gz '${MINERVA_JSON_TARBALL_URL}'"
 su jenkins -c 'tar -xzf /tmp/gocam-work/minerva-models.tar.gz -C /tmp/gocam-work/input'
 
-# Download released GO ontology and GOC groups metadata from
-# current.geneontology.org for use in step 3 (indexing).
-su jenkins -c 'wget -q -O /tmp/gocam-work/go.obo https://current.geneontology.org/ontology/go.obo'
-su jenkins -c 'wget -q -O /tmp/gocam-work/groups.yaml https://current.geneontology.org/metadata/groups.yaml'
+# Data provenance: GO ontology from our own in-pipeline output on skyhook;
+# GOC groups metadata grabbed at run from go-site (canonical git repo).
+# Neither comes from current.geneontology.org.
+su jenkins -c 'wget -q -O /tmp/gocam-work/go.obo https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/go.obo'
+su jenkins -c "wget -q -O /tmp/gocam-work/groups.yaml https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/metadata/groups.yaml"
 
 # Step 1: Convert Minerva models to GO-CAM models.
 su jenkins -c 'uv run python pipeline/convert_minerva_models_to_gocam_models.py --input-dir /tmp/gocam-work/input --output-dir /tmp/gocam-work/01-gocam-models --report-file /tmp/gocam-work/reports/01-convert.jsonl --verbose'

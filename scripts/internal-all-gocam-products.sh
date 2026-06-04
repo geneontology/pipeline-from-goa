@@ -1,30 +1,35 @@
 #!/bin/bash
 #
-# Internal all-GO-CAM products stage.
+# GO-CAM base + internal all-GO-CAM products stage.
 #
-# Produces the unfiltered "all" GO-CAM products for internal use:
-#   - all-true-go-cams-json/  (gocam-py JSON, "true" GO-CAMs only,
-#                              as defined by gocam-py)
-#   - all-true-go-cams-yaml/  (gocam-py YAML, same set as above)
-#   - all-go-cams-gpad/       (unified + per-model GPADs, all
-#                              production GO-CAMs whether "true" or
-#                              not — extracted by minerva-cli)
+# This is the single in-pipeline producer of GO-CAM-derived artifacts.
+# It grabs the canonical GO-CAM curation store (geneontology/noctua-models,
+# checked out on the host by the Jenkinsfile) and derives everything from
+# that one snapshot:
 #
-# Input is TTL models from S3 (Noctua crontab export), NOT the
-# Minerva JSON tarball used by the "true" GO-CAM pipeline.
+#   products/json/noctua-models-json.tgz   (Minerva JSON dump; issue #17)
+#       -- the canonical in-pipeline Minerva JSON, consumed downstream by
+#          the GO-CAM processing stage (which must run AFTER this one).
+#   internal/all-true-go-cams-json/        (gocam-py JSON, "true" GO-CAMs)
+#   internal/all-true-go-cams-yaml/        (gocam-py YAML, same set)
+#   internal/all-go-cams-gpad/             (unified + per-model GPADs, all
+#                                           production GO-CAMs)
 #
-# Runs inside ubuntu:noble container with /workspace mounted from
+# Data provenance: models come ONLY from the noctua-models grab (no
+# go-data-product-live-go-cam, no current). The one known, accepted interim
+# exception is the reacto-neo ontojournal used by --dump-owl-json: minerva
+# pulls a remote NEO until NEO is produced in-pipeline (see CLAUDE.md).
+#
+# Runs inside ubuntu:noble container with /workspace mounted from the
 # Jenkins workspace and /secrets containing credentials.
 #
 # Required env vars:
 #   JENKINS_UID, JENKINS_GID
 #   SKYHOOK_MACHINE
-#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 #   TARGET_GO_SITE_BRANCH
-#   TARGET_MINERVA_BRANCH
 #
 # Required mounts:
-#   /workspace -- Jenkins workspace (with gocam-py checked out)
+#   /workspace -- Jenkins workspace (noctua-models, minerva, gocam-py checked out)
 #   /secrets/skyhook_key -- skyhook ssh key
 
 set -euo pipefail
@@ -43,9 +48,8 @@ DEBIAN_FRONTEND=noninteractive apt-get -y install \
     python3 python3-pip python3-venv python3-yaml \
     git openssh-client rsync wget perl pigz
 
-# Install uv and awscli (not in Ubuntu apt repos).
+# Install uv (not in Ubuntu apt repos).
 pip3 install --break-system-packages uv
-pip3 install --break-system-packages awscli
 
 # Create jenkins user matching host UID/GID.
 groupadd -g "$JENKINS_GID" jenkins || true
@@ -74,11 +78,13 @@ MINERVA_CLI="/workspace/minerva/minerva-cli/bin/minerva-cli.sh"
 chmod +x "$MINERVA_CLI"
 
 ###
-### Phase 3: Pull TTL models from S3
+### Phase 3: Locate the canonical GO-CAM models
 ###
+### The Jenkinsfile checks out geneontology/noctua-models on the host;
+### its models/ dir is the single in-house GO-CAM grab for this run.
 
-su jenkins -c "mkdir -p $WORK/models"
-su jenkins -c "aws s3 cp s3://go-data-product-live-go-cam/ttl/ $WORK/models/ --recursive --exclude '*' --include '*.ttl'"
+MODELS=/workspace/noctua-models/models
+echo "Using GO-CAM models from ${MODELS} ($(find "$MODELS" -name '*.ttl' -type f | wc -l) ttl files)."
 
 ###
 ### Phase 4: GPAD generation (minerva-cli)
@@ -89,8 +95,9 @@ GO_LEGO_OWL="https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/ext
 
 export MINERVA_CLI_MEMORY=128G
 
-# Import TTL models into a local Blazegraph journal.
-su jenkins -c "$MINERVA_CLI --import-owl-models -f $WORK/models -j $WORK/blazegraph.jnl"
+# Import the noctua-models TTL into a local Blazegraph journal (reused by
+# both the GPAD generation and the JSON dump below).
+su jenkins -c "$MINERVA_CLI --import-owl-models -f $MODELS -j $WORK/blazegraph.jnl"
 
 # Convert GO-CAM to GPAD via SPARQL.
 su jenkins -c "mkdir -p $WORK/legacy/gpad"
@@ -102,16 +109,21 @@ su jenkins -c "perl $WORK/unify-gpads.pl $WORK/legacy/gpad > $WORK/unified.gpad"
 su jenkins -c "gzip $WORK/unified.gpad"
 
 ###
-### Phase 5: JSON dump (minerva-cli)
+### Phase 5: JSON dump (minerva-cli) -> noctua-models-json.tgz (#17)
 ###
 
-# Download the reacto-neo journal (produced by issue-35-neo-test
-# branch of geneontology/pipeline and published to skyhook).
+# KNOWN, ACCEPTED INTERIM EXCEPTION (see CLAUDE.md "Data provenance"):
+# --dump-owl-json needs a reacto-neo ontojournal and minerva pulls a remote
+# NEO for it. NEO is not yet produced in-pipeline, so we keep using this
+# journal until NEO is ported in.
 su jenkins -c "wget -q -O $WORK/blazegraph-go-lego-reacto-neo.jnl.gz http://skyhook.berkeleybop.org/blazegraph-go-lego-reacto-neo.jnl.gz"
 su jenkins -c "gunzip $WORK/blazegraph-go-lego-reacto-neo.jnl.gz"
 
 su jenkins -c "mkdir -p $WORK/jsonout"
 su jenkins -c "$MINERVA_CLI --dump-owl-json --journal $WORK/blazegraph.jnl --ontojournal $WORK/blazegraph-go-lego-reacto-neo.jnl --folder $WORK/jsonout"
+
+# Tar the Minerva JSON dump as the canonical noctua-models-json.tgz product.
+su jenkins -c "tar --use-compress-program=pigz -cf $WORK/noctua-models-json.tgz -C $WORK/jsonout ."
 
 ###
 ### Phase 6: gocam-py conversion (JSON + YAML)
@@ -175,7 +187,12 @@ rsync_retry() {
     return 1
 }
 
-SKYHOOK_BASE="skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/internal"
+SKYHOOK_MAIN="skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main"
+SKYHOOK_BASE="${SKYHOOK_MAIN}/internal"
+
+# The canonical Minerva JSON product (issue #17) -- consumed by the
+# downstream GO-CAM processing stage.
+rsync_retry "$WORK/noctua-models-json.tgz" "${SKYHOOK_MAIN}/products/json/"
 
 rsync_retry "$WORK/gocam-json/"       "${SKYHOOK_BASE}/all-true-go-cams-json/"
 rsync_retry "$WORK/gocam-yaml/"       "${SKYHOOK_BASE}/all-true-go-cams-yaml/"

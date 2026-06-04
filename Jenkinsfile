@@ -33,10 +33,11 @@ pipeline {
 	// The branch of gocam-py to use.
 	TARGET_GOCAM_PY_BRANCH = 'main'
 	// URL to the Minerva JSON models tarball (input for gocam-py).
-	// This tarball is produced by an earlier pipeline step and made
-	// available at a URL (e.g. on S3 or skyhook HTTP).
-	// WARNING: TBD -- set to actual URL once upstream pipeline is determined.
-	MINERVA_JSON_TARBALL_URL = 'https://current.geneontology.org/products/json/noctua-models-json.tgz'
+	// Produced in-pipeline by the "Internal all-GO-CAM products" stage
+	// (which runs BEFORE GO-CAM processing) from the single noctua-models
+	// grab, and published to our own skyhook products/json/ -- per the
+	// data-provenance directive this is our output, not current.geneontology.org.
+	MINERVA_JSON_TARBALL_URL = 'https://skyhook.geneontology.io/pipeline-from-goa/main/products/json/noctua-models-json.tgz'
 	// The people to call when things go bad. It is a comma-space
 	// "separated" string.
 	// TARGET_ADMIN_EMAILS = 'sjcarbon@lbl.gov,debert@usc.edu,smoxon@lbl.gov'
@@ -445,55 +446,19 @@ pipeline {
 	    }
 	}
 
-	stage('GO-CAM processing') {
-	    steps {
-		script {
-		    // Clone gocam-py on host (Jenkins git step).
-		    // Pipeline scripts are NOT included in the pip
-		    // package, so we must clone the repo and run
-		    // from there.
-		    dir('./gocam-py') {
-			git branch: TARGET_GOCAM_PY_BRANCH, url: 'https://github.com/geneontology/gocam-py.git'
-		    }
-
-		    // Fetch the in-container script fresh from the
-		    // current branch on GitHub. This lets us iterate
-		    // on script bugs without re-running the whole
-		    // pipeline -- push a script fix and Restart
-		    // From Stage will pick it up.
-		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/gocam-processing.sh -o ./scripts/gocam-processing.sh"
-
-		    withCredentials([
-			file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'),
-			string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')
-		    ]) {
-			sh """
-			    docker run --rm \\
-			      --init \\
-			      --mount type=tmpfs,destination=/tmp \\
-			      -u root:root \\
-			      -v "\$WORKSPACE":/workspace \\
-			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \\
-			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \\
-			      -e JENKINS_UID="\$JENKINS_UID" \\
-			      -e JENKINS_GID="\$JENKINS_GID" \\
-			      -e MINERVA_JSON_TARBALL_URL="\$MINERVA_JSON_TARBALL_URL" \\
-			      -e START_DATE="\$START_DATE" \\
-			      -e BRANCH_NAME="\$BRANCH_NAME" \\
-			      ubuntu:noble \\
-			      bash /workspace/scripts/gocam-processing.sh
-			"""
-		    }
-		}
-	    }
-	}
-
 	stage('Internal all-GO-CAM products') {
 	    steps {
 		script {
 		    // Clone minerva on host (Jenkins git step).
 		    dir('./minerva') {
 			git branch: TARGET_MINERVA_BRANCH, url: 'https://github.com/geneontology/minerva.git'
+		    }
+
+		    // The single in-house GO-CAM grab: the canonical
+		    // noctua-models curation store (shallow clone). Every
+		    // GO-CAM product is derived from this one snapshot.
+		    dir('./noctua-models') {
+			checkout([$class: 'GitSCM', branches: [[name: TARGET_NOCTUA_MODELS_BRANCH]], extensions: [[$class: 'CloneOption', depth: 1, noTags: true, shallow: true, timeout: 120]], userRemoteConfigs: [[url: 'https://github.com/geneontology/noctua-models.git']]])
 		    }
 
 		    // Clone gocam-py on host. Cannot reuse the
@@ -529,6 +494,50 @@ pipeline {
 			      -e TARGET_MINERVA_BRANCH="\$TARGET_MINERVA_BRANCH" \\
 			      ubuntu:noble \\
 			      bash /workspace/scripts/internal-all-gocam-products.sh
+			"""
+		    }
+		}
+	    }
+	}
+
+	stage('GO-CAM processing') {
+	    steps {
+		script {
+		    // Clone gocam-py on host (Jenkins git step).
+		    // Pipeline scripts are NOT included in the pip
+		    // package, so we must clone the repo and run
+		    // from there.
+		    dir('./gocam-py') {
+			git branch: TARGET_GOCAM_PY_BRANCH, url: 'https://github.com/geneontology/gocam-py.git'
+		    }
+
+		    // Fetch the in-container script fresh from the
+		    // current branch on GitHub. This lets us iterate
+		    // on script bugs without re-running the whole
+		    // pipeline -- push a script fix and Restart
+		    // From Stage will pick it up.
+		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/gocam-processing.sh -o ./scripts/gocam-processing.sh"
+
+		    withCredentials([
+			file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'),
+			string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')
+		    ]) {
+			sh """
+			    docker run --rm \\
+			      --init \\
+			      --mount type=tmpfs,destination=/tmp \\
+			      -u root:root \\
+			      -v "\$WORKSPACE":/workspace \\
+			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \\
+			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \\
+			      -e JENKINS_UID="\$JENKINS_UID" \\
+			      -e JENKINS_GID="\$JENKINS_GID" \\
+			      -e MINERVA_JSON_TARBALL_URL="\$MINERVA_JSON_TARBALL_URL" \\
+			      -e TARGET_GO_SITE_BRANCH="\$TARGET_GO_SITE_BRANCH" \\
+			      -e START_DATE="\$START_DATE" \\
+			      -e BRANCH_NAME="\$BRANCH_NAME" \\
+			      ubuntu:noble \\
+			      bash /workspace/scripts/gocam-processing.sh
 			"""
 		    }
 		}
