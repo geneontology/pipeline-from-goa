@@ -42,10 +42,11 @@ the phases below, not done-criteria.
    - **in `current.geneontology.org`** (bucket `go-data-product-current`).
    - **in `release.geneontology.org/XXXX-YY-ZZ`** (bucket
      `go-data-product-release`, dated).
-2. **Downloads page produced and deployed to the main website.** Deploy target
-   **not yet decided** — a `current.geneontology.org/products/pages/` product vs a
-   commit into `geneontology.github.io` (its history touches
-   geneontology.github.io#491).
+2. **Downloads page regenerated and deployed to the main website.** This is a
+   `geneontology.github.io` step (`scripts/update_downloads.py`, driven only by
+   go-site `metadata/goex.yaml`, linking to skyhook annotations), tracked at
+   **pipeline#396** — **not** a pipeline-from-goa product. Currently manual
+   ("does not yet auto-regenerate").
 3. **Data products for external interfaces are in place, and any necessary
    service updates/restarts are done** for:
    - **amigo / golr**
@@ -87,14 +88,10 @@ the phases below, not done-criteria.
 - `release_stats/` via go-stats. ✅
 - GO-CAM processing (json, index-json, search-docs, reports). ✅
 - `internal/` all-GO-CAM products. ✅
-- Downloads page `products/pages/downloads.html` via go-site
-  `scripts/downloads-page-gen.py` + `downloads-page-template.html` — fold in
-  (actively maintained upstream: go-site #2518, geneontology/pipeline #406). 🔨
-  - Input contract: a combined per-dataset report JSON with `associations` counts,
-    `metadata.species_code`, and `paint_*` entries (old `combined.report.json`),
-    rendered with `--report`/`--date`/`--inject`, printed to stdout. New input
-    source is **TBD** given GOEx proteome-named annotations — resolve before wiring.
-- Not reproduced: `products/{blazegraph,gaferencer,ttl,upstream_and_raw_data}/`. ⚰️
+- Not reproduced: `products/{blazegraph,gaferencer,ttl,upstream_and_raw_data,pages}/`. ⚰️
+  - The downloads page is **not** a pipeline product — it is generated in
+    `geneontology.github.io` (`scripts/update_downloads.py`, goex.yaml-driven),
+    tracked at pipeline#396. See Phase 7. 👤
 - Loose ends: `MINERVA_JSON_TARBALL_URL` and the reacto-neo journal are still pulled
   from `current.geneontology.org` / `skyhook.berkeleybop.org` (self/legacy references
   to repoint once we are the source). 🟡
@@ -145,6 +142,13 @@ Details / dependencies:
   internally with Minerva — not the pipeline's concern.)
 
 ## Phase 7 — Downstream app releases *(external / human)*
+- Downloads page: regenerate `downloads.html` in `geneontology.github.io` via
+  `scripts/update_downloads.py` (reads go-site `metadata/goex.yaml`, links to
+  skyhook annotations) → deploy via the website. Tracked at **pipeline#396**;
+  currently manual. **Stale-link bug:** the script's GAF links predate the #15
+  annotations restructure (`annotations/{code}.gaf.gz` /`{code}-uniprot.gaf.gz`)
+  and must move to `annotations/gaf/{code}-mod.gaf.gz` (~23 MOD orgs only) and
+  `annotations/gaf/{code}-uniprot.gaf.gz`; GPI currently links to EBI, not skyhook. 👤
 - go-cam-browser "ping patrick": regenerate committed `public/data.json` →
   `data-release-YYYY-MM-DD` branch → merge → GitHub Pages auto-deploy. 👤
 - amigo / metadata **npm** packages. 👤

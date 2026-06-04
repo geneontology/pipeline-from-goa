@@ -46,10 +46,11 @@ Facts that shape the work (so they aren't relearned):
   a human.
 - **Publish/index tooling is reused from `go-site/scripts/`**
   (`directory_indexer.py`, `s3-uploader.py`, `bucket-indexer.py`,
-  `zenodo-version-update.py`) — don't reinvent it. `downloads-page-gen.py`
-  still needs folding in, but its input is the old `combined.report.json`
-  contract (per-dataset counts + species codes), which has no obvious
-  source yet under GOEx proteome-named annotations.
+  `zenodo-version-update.py`) — don't reinvent it. The **downloads page is
+  not ours**: it is generated in `geneontology.github.io`
+  (`scripts/update_downloads.py`, driven only by go-site `metadata/goex.yaml`),
+  tracked at pipeline#396 — do not add a downloads-page generator here. (The
+  go-site `downloads-page-gen.py` is superseded.)
 
 ## Issue and commit hygiene
 
