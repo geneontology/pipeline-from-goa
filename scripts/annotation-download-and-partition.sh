@@ -2,27 +2,35 @@
 #
 # Annotation download, restructure, and partition stage.
 #
-# Syncs the GOEx annotation set (GAF, GPAD, GPI in both MOD-id-space
-# and UniProt-id-space) from the GOEx mirror S3 bucket
-# (s3://go-mirror/goex/current/), restructures into the
-# pipeline-from-goa output layout, and partitions the canonical
-# GAF set into the union-* files used for downstream indexing.
+# Syncs the GOEx annotation set (GAF, GPAD, GPI) from the GOEx mirror
+# S3 bucket (s3://go-mirror/goex/current/), lands it in the
+# pipeline-from-goa output layout, and partitions the canonical GAF
+# set into the union-* files used for downstream indexing.
 #
-# Output layout on skyhook:
-#   annotations/gaf/MNEMONIC-mod.gaf.gz       (~23 MOD-managed organisms)
-#   annotations/gaf/MNEMONIC-uniprot.gaf.gz   (all 171 organisms)
-#   annotations/gpad/MNEMONIC-mod.gpad.gz     (~23)
-#   annotations/gpad/MNEMONIC-uniprot.gpad.gz (171)
-#   annotations/gpi/MNEMONIC-mod.gpi.gz       (~23)
-#   annotations/gpi/MNEMONIC-uniprot.gpi.gz   (171)
+# As of EBI GOEx's filename simplification (go-site#2681), EBI publishes
+# per-species files already named in our target scheme --
+# SPECIES-{uniprot,mod}.<ext>.gz -- with exactly one variant per species
+# in the top-level dirs, plus an all-uniprot view under uniprot-centric/.
+# So this stage is now essentially a passthrough copy; no mnemonic
+# parsing or goex.yaml-driven MOD filtering is needed.
+#
+# Output layout on skyhook (model: uniprot-all + mod-where-available):
+#   annotations/gaf/SPECIES-uniprot.gaf.gz    (all 171, from uniprot-centric/)
+#   annotations/gaf/SPECIES-mod.gaf.gz        (~18, the EBI MOD variants)
+#   annotations/gpad/SPECIES-{uniprot,mod}.gpad.gz
+#   annotations/gpi/SPECIES-{uniprot,mod}.gpi.gz
 #   internal/union-gaf-partitions/union_*.gaf.gz  (10 partitions)
 #
-# The mod-centric filter is driven by goex.yaml: any organism whose
-# `group` is not 'UniProt' gets a -mod file (in addition to its
-# -uniprot file). The other ~148 UniProt-managed organisms only
-# appear with a -uniprot file.
+# The uniprot view comes from EBI uniprot-centric/ (one -uniprot file
+# per species); the mod view comes from the top-level dirs' *-mod files
+# (only the species for which EBI ships a MOD variant). EBI's `.gpa.gz`
+# extension is normalized to `.gpad.gz` on landing. Old pre-#2681
+# names (SPECIES_taxon_proteome) are ignored: they match neither the
+# *-uniprot nor *-mod glob, so a still-dirty mirror cannot leak them.
 #
-# EBI's `.gpa.gz` extension is normalized to `.gpad.gz` on landing.
+# The union/golr partition source is the canonical one-per-species set
+# (the top-level GAF dir's new-scheme files), NOT the uniprot-all set,
+# so MOD species are counted once.
 #
 # Runs inside ubuntu:noble container with /workspace mounted from
 # Jenkins workspace and /secrets containing credentials.
@@ -33,7 +41,8 @@
 #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 #
 # Required mounts:
-#   /workspace -- Jenkins workspace (with go-site checked out for goex.yaml)
+#   /workspace -- Jenkins workspace (go-site checked out for
+#                 scripts/partition_and_merge_gaf.py)
 #   /secrets/skyhook_key -- skyhook ssh key
 #   /secrets/s3cmd.cfg -- s3cmd configuration
 
@@ -55,6 +64,7 @@ SUBDIRS=(
 )
 DOWNLOAD_BASE='/tmp/goex-download'
 STAGED_BASE='/tmp/goex-staged'
+CANON_GAF='/tmp/goex-canonical-gaf'
 SKYHOOK_MAIN="skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main"
 
 # WARNING: MEGAHACK -- the Jenkins host's docker network DNS is broken.
@@ -80,7 +90,7 @@ apt_install_retry() {
 # Install system dependencies. awscli is installed via pip because
 # Ubuntu Noble dropped it from apt (see issue #7's e5a1f95 fix).
 DEBIAN_FRONTEND=noninteractive apt-get update
-apt_install_retry python3 python3-pip python3-yaml openssh-client rsync s3cmd
+apt_install_retry python3 python3-pip openssh-client rsync s3cmd
 pip3 install --break-system-packages awscli
 
 # Create jenkins user matching host UID/GID.
@@ -94,6 +104,7 @@ cp /secrets/skyhook_key /home/jenkins/.skyhook_key
 chown jenkins:jenkins /home/jenkins/.skyhook_key
 chmod 0600 /home/jenkins/.skyhook_key
 
+# go-site is checked out here for scripts/partition_and_merge_gaf.py.
 cd /workspace/go-site
 chown -R jenkins:jenkins .
 
@@ -112,65 +123,42 @@ done
 
 chown -R jenkins:jenkins "$DOWNLOAD_BASE"
 
-# Read goex.yaml to get the MOD-centric mnemonic set: any organism
-# whose `group` is not 'UniProt' is MOD-managed.
-mod_mnemonics_file='/tmp/mod-mnemonics.txt'
-su jenkins -c "python3 -c '
-import yaml
-d = yaml.safe_load(open(\"/workspace/go-site/metadata/goex.yaml\"))
-codes = sorted({o[\"code_uniprot\"] for o in d[\"organisms\"] if o.get(\"group\") and o[\"group\"] != \"UniProt\"})
-print(\"\n\".join(codes))
-' > ${mod_mnemonics_file}"
-mod_count=$(wc -l < "$mod_mnemonics_file")
-echo "Identified ${mod_count} MOD-managed organisms from goex.yaml."
-
-# Stage renamed files into a layout that mirrors the skyhook target:
-# a flat dir per format under annotations/, with -mod or -uniprot
-# suffix encoding the ID space. EBI's .gpa.gz is normalized to
-# .gpad.gz on the way in.
+# Stage files into the skyhook target layout: a flat dir per format
+# under annotations/. EBI already names files SPECIES-{uniprot,mod},
+# so staging is a passthrough copy with .gpa.gz -> .gpad.gz extension
+# normalization only.
 mkdir -p \
     "${STAGED_BASE}/annotations/gaf" \
     "${STAGED_BASE}/annotations/gpad" \
     "${STAGED_BASE}/annotations/gpi"
 
-# Map a downloaded file's MNEMONIC by stripping at the first underscore.
-mnemonic_of() {
-    basename "$1" | cut -d_ -f1
+# Copy one EBI file to a staged dir, normalizing the extension.
+#   $1 src file   $2 staged dir   $3 EBI ext   $4 output ext
+stage_copy() {
+    local src="$1" staged="$2" ebi_ext="$3" out_ext="$4" base out
+    base=$(basename "$src")
+    out="${base%."${ebi_ext}".gz}.${out_ext}.gz"
+    cp "$src" "${staged}/${out}"
 }
 
-# Map EBI extension -> our extension. Only .gpa -> .gpad needs remapping.
-normalized_ext() {
-    case "$1" in
-        gpa) echo 'gpad' ;;
-        *)   echo "$1" ;;
-    esac
-}
+# Per-format spec: <fmt>:<EBI ext>:<output ext>. EBI uses .gpa for GPAD.
+for spec in 'gaf:gaf:gaf' 'gpad:gpa:gpad' 'gpi:gpi:gpi'; do
+    fmt="${spec%%:*}"
+    rest="${spec#*:}"
+    ebi_ext="${rest%%:*}"
+    out_ext="${rest##*:}"
+    staged_dir="${STAGED_BASE}/annotations/${fmt}"
 
-# Stage uniprot-centric files (all 171 organisms, -uniprot suffix).
-for entry in 'uniprot-centric/gaf:gaf' 'uniprot-centric/gpad:gpa' 'uniprot-centric/gpi:gpi'; do
-    src_sub="${entry%%:*}"
-    ext="${entry##*:}"
-    out_ext=$(normalized_ext "$ext")
-    staged_dir="${STAGED_BASE}/annotations/${out_ext}"
-    for src in "${DOWNLOAD_BASE}/${src_sub}"/*."${ext}.gz"; do
+    # uniprot view: all species, from EBI uniprot-centric/.
+    for src in "${DOWNLOAD_BASE}/uniprot-centric/${fmt}"/*-uniprot."${ebi_ext}".gz; do
         [ -e "$src" ] || continue
-        mnem=$(mnemonic_of "$src")
-        cp "$src" "${staged_dir}/${mnem}-uniprot.${out_ext}.gz"
+        stage_copy "$src" "$staged_dir" "$ebi_ext" "$out_ext"
     done
-done
 
-# Stage mod-centric files (filtered to MOD-managed organisms, -mod suffix).
-for entry in 'gaf:gaf' 'gpad:gpa' 'gpi:gpi'; do
-    src_sub="${entry%%:*}"
-    ext="${entry##*:}"
-    out_ext=$(normalized_ext "$ext")
-    staged_dir="${STAGED_BASE}/annotations/${out_ext}"
-    for src in "${DOWNLOAD_BASE}/${src_sub}"/*."${ext}.gz"; do
+    # mod view: only where EBI ships a MOD variant, from the top-level dir.
+    for src in "${DOWNLOAD_BASE}/${fmt}"/*-mod."${ebi_ext}".gz; do
         [ -e "$src" ] || continue
-        mnem=$(mnemonic_of "$src")
-        if grep -qx "$mnem" "$mod_mnemonics_file"; then
-            cp "$src" "${staged_dir}/${mnem}-mod.${out_ext}.gz"
-        fi
+        stage_copy "$src" "$staged_dir" "$ebi_ext" "$out_ext"
     done
 done
 
@@ -185,6 +173,18 @@ for d in \
     ; do
     printf '%-60s %5d\n' "$d" "$(find "$d" -type f | wc -l)"
 done
+
+# Build the canonical one-per-species GAF set for partitioning: the
+# top-level GAF dir's new-scheme files (one variant per species). This
+# deliberately excludes the uniprot-all duplicates and any stale
+# pre-#2681 names.
+mkdir -p "$CANON_GAF"
+for src in "${DOWNLOAD_BASE}/gaf"/*-uniprot.gaf.gz "${DOWNLOAD_BASE}/gaf"/*-mod.gaf.gz; do
+    [ -e "$src" ] || continue
+    cp "$src" "${CANON_GAF}/"
+done
+chown -R jenkins:jenkins "$CANON_GAF"
+echo "Canonical GAFs for partitioning: $(find "$CANON_GAF" -type f | wc -l)"
 
 # Helper for retried rsync. Use rsync (not scp) because the per-dir
 # file lists are large enough to risk ARG_MAX issues and rsync handles
@@ -208,9 +208,8 @@ rsync_retry "${STAGED_BASE}/annotations/gpad/"  "${SKYHOOK_MAIN}/annotations/gpa
 rsync_retry "${STAGED_BASE}/annotations/gpi/"   "${SKYHOOK_MAIN}/annotations/gpi/"
 
 # Partition the canonical GAF set into union-* files for downstream
-# indexing. Source is the mod-centric (top-level) GAF set, matching
-# the prior pipeline's behavior.
-su jenkins -c 'python3 scripts/partition_and_merge_gaf.py /tmp/goex-download/gaf /tmp/merged union 10'
+# indexing.
+su jenkins -c "cd /workspace/go-site && python3 scripts/partition_and_merge_gaf.py '${CANON_GAF}' /tmp/merged union 10"
 su jenkins -c 'ls -AlF /tmp/merged'
 
 # Copy merged files to skyhook.

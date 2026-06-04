@@ -129,11 +129,18 @@ fi
 
 # Push each mirrored subdir to its S3 destination.
 # `aws s3 sync` only uploads files where size or mtime differ.
+# `--delete` removes S3 objects no longer present at EBI -- essential
+# since the EBI GOEx filename simplification (go-site#2681) renamed every
+# per-species file (SPECIES_taxon_proteome -> SPECIES-{uniprot,mod}).
+# Without --delete the mirror keeps both the old and new names, which
+# leaks stale duplicates into the annotation stage. The "too few GAFs"
+# sanity gate above guards against --delete nuking the mirror on a bad
+# EBI fetch.
 for sub in "${MIRROR_PATHS[@]}"; do
     src="${LOCAL_BASE}/${sub}/"
     dest="${S3_BASE}/${sub}/"
     echo "Syncing ${src} to ${dest} ..."
-    aws s3 sync "$src" "$dest" --no-progress
+    aws s3 sync "$src" "$dest" --no-progress --delete
 done
 
 # Invalidate CloudFront for all mirrored paths in a single call.
