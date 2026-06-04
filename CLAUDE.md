@@ -73,11 +73,21 @@ depending on them makes the release non-reproducible.
 derive everything from that one snapshot — the Minerva JSON dump
 (`products/json/noctua-models-json.tgz`), the true-GO-CAM products, the
 `go-cams/index-json/` API indexes (go-fastapi), and the GO-CAM Browser search
-docs. Known violations still to fix: `gocam-processing.sh` reads the Minerva
-tarball + `go.obo`/`groups.yaml` from `current`; `internal-all-gocam-products.sh`
-reads `ttl/` from `go-data-product-live-go-cam` and the reacto-neo journal from
-legacy skyhook. (Softer case: go-stats reads the *prior* release's stats from
-`current`/`snapshot` for diffing — our own prior output, decision pending.)
+docs. Known violations to repoint now: `gocam-processing.sh` reads the Minerva tarball
++ `go.obo`/`groups.yaml` from `current`; `internal-all-gocam-products.sh` reads
+`ttl/` from `go-data-product-live-go-cam` (both → the noctua-models grab /
+in-pipeline ontology + run-time go-site metadata).
+
+**Known, ACCEPTED interim exception — the reacto-neo ontojournal / NEO.** The
+Minerva JSON dump (`minerva-cli --dump-owl-json`) needs a reacto-**neo**
+ontojournal, and minerva pulls a *remote* NEO for it. NEO is not in GOEx
+ontology and is not yet produced in this pipeline, so for now the dump keeps
+using the remote NEO. This is a flagged, on-the-roadmap exception (port NEO into
+the pipeline later) — do not treat it as a blocker, and do not "fix" it by
+inventing a non-canonical NEO source.
+
+(Softer case: go-stats reads the *prior* release's stats from `current`/`snapshot`
+for diffing — our own prior output, decision pending.)
 
 ## Issue and commit hygiene
 
