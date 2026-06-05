@@ -34,11 +34,12 @@ deliberately **out of scope of this definition** — they're lifecycle context i
 the phases below, not done-criteria.
 
 1. **All desired files are safely:**
-   - **in Zenodo** — the DOIed reproducibility subset, across **one or more
-     records** (≥1). Currently split into a "main" record + a "products" record
-     because the main archive grew too large to upload reliably (see Zenodo
-     upload-size tickets); the record count for the expanded GOEx set is **TBD /
-     actively being worked**.
+   - **in Zenodo** — the DOIed reproducibility subset, kept as **two separate
+     records**: a reproducible "main" archive (concept 1205166) + a larger
+     "secondary products" archive (concept 10946933, golr-dominated). The split
+     is deliberate (clean reproducible-vs-products sets, independent
+     restart-on-fail, parallelizable) — *not* an upload-size limit: streaming was
+     validated to 12 GiB, well under Zenodo's 50 GB/record ceiling (#19).
    - **in `current.geneontology.org`** (bucket `go-data-product-current`).
    - **in `release.geneontology.org/XXXX-YY-ZZ`** (bucket
      `go-data-product-release`, dated).
@@ -101,12 +102,21 @@ the phases below, not done-criteria.
 - Files-in-expected-locations / parity check (#3). 🟡
 - Human approval / wait gate — deferred for now, add later. 🔨(later)
 
-## Phase 4 — Bless → Archive (mint the DOI first)
-- Build the release archive tarball from the skyhook `main` tree. 🔨
-- Zenodo versioned push → **mint DOI** (reuse `go-site/scripts/zenodo-version-update.py`;
-  concept ID TBD). DOI is minted **first** so it can be referenced elsewhere. 🔨
-- Write `metadata/release-archive-doi.json` back into the tree (it travels *in* the
-  published products). 🔨
+## Phase 4 — Bless → Archive (mint the DOI first) — #19
+- Build the release archive tarball(s) from the skyhook `main` tree — two
+  archives, the reproducible "main" subset + the larger "secondary products"
+  (golr-dominated) subset. 🔨
+- Zenodo versioned push → **mint DOI**, via `scripts/zenodo-archive-upload.py`
+  (InvenioRDM Records API; the dead deposit/`zenodo-version-update.py` path is
+  retired — pipeline#345). Concepts: main **1205166**, products **10946933**;
+  per-record metadata is **reused** from each concept's own latest version, with
+  only `version`/`publication_date` taken from `summary.txt` ("Start date:").
+  DOI minted **first** so it can be referenced elsewhere. Validated end-to-end on
+  the Zenodo **sandbox** (incl. a 12 GiB streamed upload + byte-exact commit);
+  production is an explicit `--production` opt-in, still to be wired into a bless
+  stage and run. 🟡
+- Write `metadata/release-archive-doi.json` (the uploader's `--output`, shape
+  `{"doi": ...}`) back into the tree (it travels *in* the published products). 🟡
 - BDBag remote-file manifest — optional, was in old Archive. 🔨(optional)
 
 ## Phase 5 — Bless → Publish (make it current)
@@ -168,10 +178,13 @@ Details / dependencies:
 - #11 — `release_stats/` rename (pinned cutover) 🧊
 - #12 — `go-cams/index-json/` move (pinned cutover) 🧊
 - #16 — announcement of file name/location changes
+- #19 — bless tail: Zenodo archiving + DOI minting (Phase 4)
 
 ## What's actually left to build here
 
-The only net-new pipeline code is **Phase 4 (Archive)** and **Phase 5
-(Publish)**. Phase 6 mostly falls out for free once Publish populates
-`current.geneontology.org`. Build order: Publish → Archive → (optional)
-Deploy hooks.
+The net-new pipeline code is **Phase 4 (Archive)** and **Phase 5 (Publish)**.
+Phase 4's Zenodo archival step is now scripted and sandbox-validated
+(`scripts/zenodo-archive-upload.py`, #19); what remains there is assembling the
+archive tarball(s) and wiring it into a bless stage. Phase 6 mostly falls out
+for free once Publish populates `current.geneontology.org`. Build order:
+Publish → Archive → (optional) Deploy hooks.
