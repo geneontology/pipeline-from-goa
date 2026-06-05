@@ -15,7 +15,10 @@ long, non-resumable run; pre-QCed GOEx inputs make it unnecessary.
 The full start-to-sign-off lifecycle — what's automated, what's still to
 build, what lives in `operations`, what's external or legacy — is mapped
 in **`docs/release-runbook.md`**. Read it before working on the
-publish/archive tail, and keep it current as the source of truth.
+publish/archive tail, and keep it current as the source of truth. The
+file-level delta vs `current.geneontology.org` — sized, classified
+(intentional / publish-time / gap), with the resolved sourcing decisions —
+is in **`docs/parity-and-products.md`**.
 
 Facts that shape the work (so they aren't relearned):
 
@@ -296,6 +299,19 @@ hours of pipeline time. Before pushing a Jenkinsfile change:
 - Verify any new credentials IDs are correct
 - Consider whether the change can be moved into a script instead
   (scripts are cheap to iterate, the Jenkinsfile is expensive)
+
+### Run cleanup: skyhook self-cleans, S3 does not
+
+Each run's `initialize()` does `rm -r -f` of the whole `$JOB_NAME` tree on
+skyhook, so **skyhook self-cleans between runs**. The S3 buckets we sync to
+(`go-mirror`, `go-data-product-*`) do **not** — a plain `aws s3 sync` only
+adds/updates, so when an upstream renames or drops files (as EBI GOEx did in
+the `SPECIES-{uniprot,mod}` rename, go-site#2681) stale objects accumulate and
+leak into later stages. Use `aws s3 sync --delete` (behind a sanity gate, like
+the "too few GAFs" check in `populate-goex-mirror.sh`) when mirroring an
+upstream that can remove files, and make stages that read a possibly-dirty
+mirror tolerant of stale names (the annotation stage matches only the new
+`*-uniprot`/`*-mod` globs).
 
 ### Multi-line bash gotchas
 
