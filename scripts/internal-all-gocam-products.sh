@@ -43,10 +43,15 @@ echo 'search lbl.gov' >> /etc/resolv.conf
 ###
 
 DEBIAN_FRONTEND=noninteractive apt-get update
+# graphviz + libgraphviz-dev are needed because gocam-py's
+# `uv sync --all-extras` (Phase 6) builds pygraphviz from source, which
+# requires the graphviz development headers (graphviz/cgraph.h). Matches
+# scripts/gocam-processing.sh, which installs the same.
 DEBIAN_FRONTEND=noninteractive apt-get -y install \
     openjdk-21-jdk-headless maven \
     python3 python3-pip python3-venv python3-yaml \
-    git openssh-client rsync wget perl pigz
+    git openssh-client rsync wget perl pigz \
+    graphviz libgraphviz-dev
 
 # Install uv (not in Ubuntu apt repos).
 pip3 install --break-system-packages uv
