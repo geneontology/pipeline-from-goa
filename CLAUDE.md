@@ -161,7 +161,9 @@ For examples of pinned renames waiting on cutover, see #11
 
 If the audit returns no external consumers, the rename is safe to
 land directly — see #13 (`reports/groups/`) and #14
-(`reports/go-rules/`) for examples.
+(`reports/go-rules/`), and #20 (those two later renamed to
+`reports/go-rules-by-group/` and `reports/tests-go-rules/`) for
+examples.
 
 ## Jenkins CI
 

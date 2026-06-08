@@ -61,7 +61,7 @@ skyhook only because of the new `internal/` tree (61,099 files).
 | `produce-derivatives.sh` | `products/solr/golr-index-contents.tgz` + `golr_timestamp.log`; `release_stats/*` (go-stats) |
 | `gocam-processing.sh` | `go-cams/json/*`; `products/indexed-go-cams/*`; `go-cams/index-json/*` (6); `products/go-cam-search/go-cam-browser-search-docs.json`; `reports/go-cam/*` |
 | `internal-all-gocam-products.sh` | `internal/all-true-go-cams-json/*`; `internal/all-true-go-cams-yaml/*`; `internal/all-go-cams-gpad/unified.gpad.gz` + `model/*` |
-| QC reports download | `reports/groups/*_gorule_report.*`; `reports/go-rules/gorules_test_errors.*`; `reports/*` (rest) |
+| QC reports download | `reports/go-rules-by-group/*_gorule_report.*`; `reports/tests-go-rules/gorules_test_errors.*`; `reports/*` (rest) |
 | Metadata + README | `metadata/**` (rsync of `go-site/metadata/`); `annotations/README.txt` |
 | PANTHER trees | `products/panther/arbre.tgz` |
 
@@ -73,7 +73,7 @@ Note: `initialize()` also `mkdir`s `products/json/`, but **no stage populates it
 ### Intentional / known — NOT gaps
 - **`internal/`** — new (61,099 files; `all-go-cams-gpad/model/` is 54,385 of them).
 - **`go-cams/json/` (2008), `products/indexed-go-cams/` (2008), `products/go-cam-search/`** — new per-model GO-CAM publishing.
-- **`reports/` restructure** — new `go-cam/`, `groups/` (60 EBI gorule reports, 1.7 G), `go-rules/` replace the old flat per-dataset reports (`assigned-by-*`, `*-owltools-check.txt`, `*.report.json`, `*.gaferences.json`, `paint_*`, `noctua_*`, `sparta-report.json`, …).
+- **`reports/` restructure** — new `go-cam/`, `go-rules-by-group/` (60 EBI gorule reports, 1.7 G), `tests-go-rules/` replace the old flat per-dataset reports (`assigned-by-*`, `*-owltools-check.txt`, `*.report.json`, `*.gaferences.json`, `paint_*`, `noctua_*`, `sparta-report.json`, …).
 - **`annotations/` restructure** — `{gaf,gpad,gpi}/MNEMONIC-{mod,uniprot}` replaces flat `cgd.gaf.gz`, `mgi.gaf.gz`, … (see `docs/annotations-mapping.md`; announced in #16).
 - **Discontinued products** (current-only, deliberately not reproduced): `products/blazegraph` (17 G), `products/gaferencer`, `products/ttl` (2.1 G), `products/upstream_and_raw_data` (1.9 G).
 - **Discontinued annotations** (current-only, deliberately not reproduced): `filtered_goa_uniprot_all.gaf.gz` (10.2 G) + `_noiea` variants — the single all-UniProt mega-GAF, replaced by the expanded per-proteome file base; `annotations/archive/` (1265 files, a 2025-08-22 one-time snapshot of *retired* datasets, e.g. `aspgd` — historical, not a live product).
@@ -98,7 +98,7 @@ Biggest skyhook dirs (the archive's bulk):
 |---|---:|---:|
 | products/solr | 2 | 11.0 G |
 | ontology/extensions | 33 | 5.8 G |
-| reports/groups | 60 | 1.7 G |
+| reports/go-rules-by-group | 60 | 1.7 G |
 | ontology/imports | 45 | 674 M |
 | annotations/gaf | 194 | 316 M |
 | annotations/gpad | 194 | 299 M |

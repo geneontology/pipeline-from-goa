@@ -80,7 +80,7 @@ the phases below, not done-criteria.
 - Populate GOEx mirror S3 buffer (#7). ✅
 - Ontology → skyhook. ✅
 - Annotations download + partition (mod/uniprot, `union_*`). ✅
-- QC reports (groups / go-rules split). ✅
+- QC reports (go-rules-by-group / tests-go-rules split). ✅
 - Metadata + `annotations/README.txt`. ✅
 - PANTHER `arbre.tgz`. ✅
 

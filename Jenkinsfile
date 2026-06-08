@@ -556,12 +556,12 @@ pipeline {
 		    }
 
 		    // Copy to skyhook with filter-on-copy:
-		    //   - per-source *_gorule_report.* → reports/groups/
-		    //   - global gorules_test_errors.*  → reports/go-rules/
+		    //   - per-source *_gorule_report.* → reports/go-rules-by-group/
+		    //   - global gorules_test_errors.*  → reports/tests-go-rules/
 		    //   - everything else (incl. future EBI additions) → reports/ top level
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./pub/contrib/goa/goex/current/qc_reports/*_gorule_report.* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/reports/groups/'
-			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./pub/contrib/goa/goex/current/qc_reports/gorules_test_errors.* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/reports/go-rules/'
+			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./pub/contrib/goa/goex/current/qc_reports/*_gorule_report.* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/reports/go-rules-by-group/'
+			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./pub/contrib/goa/goex/current/qc_reports/gorules_test_errors.* skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/reports/tests-go-rules/'
 			sh 'rsync -avz --exclude="*_gorule_report.*" --exclude="gorules_test_errors.*" -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" ./pub/contrib/goa/goex/current/qc_reports/ skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/reports/'
 		    }
 		}
@@ -1150,8 +1150,8 @@ void initialize() {
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/annotations/gpi || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/ontology || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports || true'
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports/groups || true'
-	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports/go-rules || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports/go-rules-by-group || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports/tests-go-rules || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/release_stats || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/internal/all-true-go-cams-json || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/internal/all-true-go-cams-yaml || true'
