@@ -103,6 +103,10 @@ the phases below, not done-criteria.
 - Human approval / wait gate — deferred for now, add later. 🔨(later)
 
 ## Phase 4 — Bless → Archive (mint the DOI first) — #19
+
+*Run-level detail — API gotchas + the safe first-production-run procedure:
+**docs/zenodo-archival.md**.*
+
 - Build the release archive tarball(s) from the skyhook `main` tree — two
   archives, the reproducible "main" subset + the larger "secondary products"
   (golr-dominated) subset. 🔨
@@ -112,9 +116,9 @@ the phases below, not done-criteria.
   per-record metadata is **reused** from each concept's own latest version, with
   only `version`/`publication_date` taken from `summary.txt` ("Start date:").
   DOI minted **first** so it can be referenced elsewhere. Validated end-to-end on
-  the Zenodo **sandbox** (incl. a 12 GiB streamed upload + byte-exact commit);
-  production is an explicit `--production` opt-in, still to be wired into a bless
-  stage and run. 🟡
+  the Zenodo **sandbox** (the real 10.70 GiB golr tarball through the actual
+  script + a 12 GiB synthetic PUT, byte-exact commits); production is an explicit
+  `--production` opt-in, still to be wired into a bless stage and run. 🟡
 - Write `metadata/release-archive-doi.json` (the uploader's `--output`, shape
   `{"doi": ...}`) back into the tree (it travels *in* the published products). 🟡
 - BDBag remote-file manifest — optional, was in old Archive. 🔨(optional)
