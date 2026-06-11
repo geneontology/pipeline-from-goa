@@ -174,12 +174,83 @@ Details / dependencies:
 - Inform pipeline channel (Suzi / Pascale). 👤
 - Final smoke checks — `current` up, golr/amigo serving new data, DOI resolves. 🟡
 
+## Cutover sequence — old → new pipeline (June 2026)
+
+The **one-time** switchover where `pipeline-from-goa` takes over from the old
+`pipeline` as the source for `current.geneontology.org` (distinct from the
+per-release lifecycle in Phases 0–8, which it reuses). Two things happen
+together at T‑0: the new pipeline starts **populating** `current/` (a mechanical
+bless, Phases 4–5), and the breaking `/annotations/` layout goes **live to
+users** (needs a grace period). Ownership: annotations grace = **operations#83**;
+capacity = **operations#82**; date-gate + umbrella = **#1**; consumer file-path
+contracts = **#3**.
+
+### Track A — Readiness gates (must be green before T‑0)
+- **Publish/bless tail built — the critical path.** Today the pipeline builds to
+  skyhook but cannot publish to S3. Net-new (Phases 4–5; operations#83
+  work-item-1): assemble archive tarball(s) → Zenodo DOI (#19) →
+  `release-archive-doi.json` → copy to `go-data-product-release` (dated) → copy
+  to `go-data-product-current` → CloudFront invalidate → indexes. 🔨
+- **Consumer-contract parity verified (#3).** Mostly done; #3 holds the checklist. 🟡
+- **Capacity (operations#82).** Largely green (monit thresholds, HTTP health
+  probe, bot mitigation); only the T+24h post-switch verification remains. 🔧🟡
+- **CloudFront Function mapping generator (operations#83 wi‑3).** Emit the
+  301/410 table from `goex.yaml` (canonical source; `annotations-mapping.md` is
+  derived doc). 🔨
+- **Announcement** to programmatic consumers (template: closed pipeline#424). 👤
+- *Not a gate — already done/live:* the blazegraph-free **GO API** is live and
+  ops-managed in `operations/provision/go-fastapi/`; go-fastapi#137's only
+  residual is the switchover repoint to the new index location (Track D / #12).
+
+### Track B — The cutover act (T‑0): first blessed new-pipeline release
+Fixed order (also in CLAUDE.md): **Zenodo mint DOI → write
+`release-archive-doi.json` → copy tree to release bucket (dated) → copy to
+current bucket → CloudFront invalidate.** This is the moment `current/` becomes
+new-pipeline output.
+- **Publish-stage constraint — `/annotations/` must be additive.** The copy into
+  `go-data-product-current` must **not** `--delete` under `/annotations/`: the
+  new `gaf/`·`gpad/`·`gpi/` subdirs land *alongside* the frozen old flat files so
+  both coexist (the operations#83 Phase‑1 "physical overlap" contract). A
+  careless `sync --delete` would wipe the old files and break the grace period.
+
+### Track C — `/annotations/` grace period (operations#83, ~3 months)
+- **Phase 1 — physical overlap (T‑0 → ~1 mo):** old flat files frozen; new
+  subdir layout coexists (no clobber, per Track B); no CDN change.
+- **Phase 2 — forwarding (~1 → ~3 mo):** **deploy the CloudFront Function first**
+  (1:1 → `301`, no-equivalent or 1:N MOD fan-out → `410`, else passthrough),
+  *then* delete the old flat files — so there is never a bare‑`404` window; the
+  delete is cleanup behind a live redirect. Before deleting, **verify the API and
+  other consumers are actually reading the new files** (not pinned to old/cached
+  paths).
+- **Phase 3 — steady state (~3 mo+):** remove the Function; old paths → `404`.
+  Done. (`release.geneontology.org` needs none of this — date-stamped dirs
+  self-separate.)
+
+### Track D — Consumer deploys (T‑0+, first days, within #83 Phase 1)
+Picking up the new *release* (distinct from the annotations grace mechanism):
+- golr/AmiGO deploy from `current/products/solr` + the DOI → operations#82 T+24h
+  verify. 🔧
+- GO API **restart** (re-fetches `index-json`); repoint only if #12 lands. 🔧
+- go-stats auto-fires on `current/metadata/release-date.json` change (SNS). 🟡
+- go-cam-browser regenerate + commit `public/data.json` ("ping patrick"). 👤
+- Downloads page regenerate / switch to new layout (#396). 👤
+- amigo / metadata **npm** packages. 👤
+
+### Decisions to lock before putting dates on this
+1. **Cutover date** — "June 2026"; pin the actual day (operations#83 wi).
+2. **index-json (#12): rename or keep?** Annotations is already one breaking
+   change, and we kept `release_stats` (#11) to avoid breakage. Recommend
+   **keeping `go-cams/index-json/`** (defer #12) so go-fastapi needs no config
+   change at cutover; revisit later.
+3. **Bless trigger (#1)** — manual vs timed; intentionally open.
+4. **Downloads page link target (#396)** — stable `current/` vs rolling skyhook.
+
 ## Cross-cutting tracking issues
 - #1 — assemble full pipeline / switchover timing
 - #2 — OWLTools file-access bug
 - #3 — files in expected locations (parity)
 - #9 — Cache-Control on published S3 objects
-- #11 — `release_stats/` rename (pinned cutover) 🧊
+- #11 — `release_stats/` rename — **closed not-planned** (keeping `release_stats/` as-is)
 - #12 — `go-cams/index-json/` move (pinned cutover) 🧊
 - #16 — announcement of file name/location changes
 - #19 — bless tail: Zenodo archiving + DOI minting (Phase 4)
