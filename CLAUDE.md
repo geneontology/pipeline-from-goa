@@ -156,8 +156,9 @@ person, mark "In Progress" on the active project — see "Which
 project" above) and pin the rename behind a deprecation/cutover
 plan rather than landing it.
 
-For examples of pinned renames waiting on cutover, see #11
-(`release_stats/` rename) and #12 (`go-cams/index-json/` move).
+For an example of a pinned rename waiting on cutover, see #12
+(`go-cams/index-json/` move). (#11, the `release_stats/` rename, was
+dropped — we keep `release_stats/` as-is.)
 
 If the audit returns no external consumers, the rename is safe to
 land directly — see #13 (`reports/groups/`) and #14
