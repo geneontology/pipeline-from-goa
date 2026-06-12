@@ -127,6 +127,12 @@ pipeline {
 	    "http://snapshot.geneontology.org/ontology/extensions/go-amigo.owl"
 	].join(" ")
 	// WARNING: hard-coded for the moment.
+	// These union GAFs are served from S3 (go-public) over plain HTTP, NOT from
+	// skyhook HTTPS: OWLTools cannot read the skyhook-HTTPS gzip (EOFException /
+	// URL mangling -- owlcollab/owltools#171), so the annotation stage pushes
+	// union* to s3://go-public/skyhook-geneontology-io/ for this consumer. Do NOT
+	// switch back to the commented-out skyhook URLs unless OWLTools is fixed.
+	// See geneontology/pipeline-from-goa#2.
 	GOLR_INPUT_GAFS = [
 	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_1.gaf.gz",
 	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_2.gaf.gz",
