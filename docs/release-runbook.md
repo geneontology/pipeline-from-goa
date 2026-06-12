@@ -78,6 +78,9 @@ the phases below, not done-criteria.
 
 ## Phase 1 — Acquire pre-QCed inputs from GOEx
 - Populate GOEx mirror S3 buffer (#7). ✅
+- **Upstream GOA freshness (#21):** mirror `release_date.txt`, record the GOA
+  drop date into the release, and gate on it advancing vs the last release —
+  don't build on stale upstream data. 🔨
 - Ontology → skyhook. ✅
 - Annotations download + partition (mod/uniprot, `union_*`). ✅
 - QC reports (go-rules-by-group / tests-go-rules split). ✅
@@ -192,6 +195,9 @@ contracts = **#3**.
   `release-archive-doi.json` → copy to `go-data-product-release` (dated) → copy
   to `go-data-product-current` → CloudFront invalidate → indexes. 🔨
 - **Consumer-contract parity verified (#3).** Mostly done; #3 holds the checklist. 🟡
+- **Upstream GOA freshness gate (#21).** Confirm the GOA drop is fresh
+  (`release_date.txt` advanced vs the last release) before the cutover build —
+  don't ship the first new-pipeline release on stale upstream data. 🔨
 - **Capacity (operations#82).** Largely green (monit thresholds, HTTP health
   probe, bot mitigation); only the T+24h post-switch verification remains. 🔧🟡
 - **CloudFront Function mapping generator (operations#83 wi‑3).** Emit the
