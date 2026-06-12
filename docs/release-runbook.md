@@ -106,9 +106,13 @@ the phases below, not done-criteria.
 - Human approval / wait gate — deferred for now, add later. 🔨(later)
 
 > **Build-then-publish; `internal/` is the staging area.** The pipeline has two
-> halves: get **everything** onto skyhook in the **build** half — final data,
-> products, *and* the artifacts publication will consume — then run the
-> **publish** half, which only moves things to their destinations. `internal/`
+> halves: compute **everything we can** onto skyhook in the **build** half —
+> final data, products, *and* the artifacts publication will consume — then run
+> the **publish** half, which materializes them at their destinations: it
+> generates the (per-destination) indexes and performs the mutating pushes to the
+> S3 buckets / `go-public` / Zenodo. Publish computes no *new* release data, but
+> it is **not** a pure copy — the per-destination indexes and the bucket sync are
+> real work. `internal/`
 > holds build outputs that are **not** part of the served tree: it is **never
 > copied to the current/release buckets, never indexed (#22/#23), and never
 > nested inside an archival tarball**. But it *is* the holding area whose contents
