@@ -105,12 +105,17 @@ the phases below, not done-criteria.
 - Files-in-expected-locations / parity check (#3). 🟡
 - Human approval / wait gate — deferred for now, add later. 🔨(later)
 
-> **Publish exclusion — `internal/` is never published.** The `internal/`
-> directory is pipeline-internal staging (intermediate GO-CAM + union products,
-> ~61k files) that exists only to feed downstream stages on skyhook. Exclude it
-> from **every** publish step: the archival tarballs (Phase 4), the S3 copy to
-> the release/current buckets (Phase 5), and index generation (#22/#23). It is
-> not uploaded, not indexed, not archived.
+> **Build-then-publish; `internal/` is the staging area.** The pipeline has two
+> halves: get **everything** onto skyhook in the **build** half — final data,
+> products, *and* the artifacts publication will consume — then run the
+> **publish** half, which only moves things to their destinations. `internal/`
+> holds build outputs that are **not** part of the served tree: it is **never
+> copied to the current/release buckets, never indexed (#22/#23), and never
+> nested inside an archival tarball**. But it *is* the holding area whose contents
+> feed specific publish steps — the Zenodo archive tarballs are built (excluding
+> `internal/`) and dropped **into** `internal/`, then pushed to Zenodo (#19); the
+> per-model Minerva JSON is staged there, then pushed to `go-public/files/go-cam/`
+> (#24). Nothing in `internal/` is itself served from current/release.
 
 ## Phase 4 — Bless → Archive (mint the DOI first) — #19
 
@@ -151,8 +156,12 @@ Details / dependencies:
   Fallback: run the finalization indexer by hand (as before) if the in-pipeline
   step isn't ready for a given release.
 - Set **Cache-Control** on upload (#9).
-- Pinned renames to land at/with cutover: `release_stats/` #11 🧊,
-  `go-cams/index-json/` #12 🧊.
+- **`go-public` serving pushes** (publish-stage): per-model Minerva JSON →
+  `go-public/files/go-cam/` for the GO API (#24); union GAFs → `go-public/skyhook-geneontology-io/`
+  for OWLTools (currently pushed at build — align to publish later).
+- Pinned GO-CAM path renames to land at/with cutover: `go-cams/index-json/` #12 🧊
+  (plus the GO-CAM layout refresh — see #3). (#11 `release_stats/` rename was
+  dropped; keeping `release_stats/`.)
 - Switchover timing — when `pipeline-from-goa` takes over populating `current` (#1). (decision)
 - Announcement of file name/location changes (#16). 👤
 
