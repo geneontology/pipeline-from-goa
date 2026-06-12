@@ -121,6 +121,36 @@ the phases below, not done-criteria.
 > per-model Minerva JSON is staged there, then pushed to `go-public/files/go-cam/`
 > (#24). Nothing in `internal/` is itself served from current/release.
 
+### Stage structure & restart model — the hard build/publish divide
+
+A **hard divide** separates the *production* (build) segment from the
+*publication* segment, enforced by the **bless gate** (mechanism TBD): the build
+segment puts **everything** on skyhook; nothing publishes until bless. Stage
+granularity is chosen for Restart-from-Stage recovery.
+
+- **Build segment (production):** the existing product stages, plus — per-model
+  Minerva JSON staged into `internal/` (#24, folded into the GO-CAM stage) and,
+  **last**, `build-release-archives.sh` (needs every product on skyhook) tarring
+  the two subsets into `internal/release-archives/`.
+- **— bless gate (hard divide) —**
+- **Publication segment:** fine-grained stages (each a restart point), in the
+  authoritative order —
+  1. **Zenodo** — upload both tarballs from skyhook (run the uploader *on*
+     skyhook, streaming from local disk) → mint DOIs → write
+     `metadata/release-archive-doi.json` into the tree. ⚠️ **Not idempotent**
+     (each run mints a new version) — needs a *skip-if-a-version-for-this-date-
+     already-exists* guard before it is safe to Restart-from-Stage; otherwise a
+     restart double-mints.
+  2. Copy tree (minus `internal/`) → release bucket (dated) + indexes.
+  3. Copy tree (minus `internal/`) → current bucket + indexes.
+  4. `go-public` pushes (per-model Minerva JSON #24; union GAFs).
+  5. CloudFront invalidation (current + release).
+
+Stages 2–5 are **idempotent** (S3 sync, index regen, CloudFront) — safe to
+restart freely; only stage 1 (Zenodo) needs the guard. The DOI file and the
+per-destination indexes are **publish-generated** (they can't exist before
+bless) — the one nuance to "everything on skyhook first".
+
 ## Phase 4 — Bless → Archive (mint the DOI first) — #19
 
 *Run-level detail — API gotchas + the safe first-production-run procedure:
