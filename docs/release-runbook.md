@@ -105,14 +105,21 @@ the phases below, not done-criteria.
 - Files-in-expected-locations / parity check (#3). 🟡
 - Human approval / wait gate — deferred for now, add later. 🔨(later)
 
+> **Publish exclusion — `internal/` is never published.** The `internal/`
+> directory is pipeline-internal staging (intermediate GO-CAM + union products,
+> ~61k files) that exists only to feed downstream stages on skyhook. Exclude it
+> from **every** publish step: the archival tarballs (Phase 4), the S3 copy to
+> the release/current buckets (Phase 5), and index generation (#22/#23). It is
+> not uploaded, not indexed, not archived.
+
 ## Phase 4 — Bless → Archive (mint the DOI first) — #19
 
 *Run-level detail — API gotchas + the safe first-production-run procedure:
 **docs/zenodo-archival.md**.*
 
-- Build the release archive tarball(s) from the skyhook `main` tree — two
-  archives, the reproducible "main" subset + the larger "secondary products"
-  (golr-dominated) subset. 🔨
+- Build the release archive tarball(s) from the skyhook `main` tree (**excluding
+  `internal/`**) — two archives, the reproducible "main" subset + the larger
+  "secondary products" (golr-dominated) subset. 🔨
 - Zenodo versioned push → **mint DOI**, via `scripts/zenodo-archive-upload.py`
   (InvenioRDM Records API; the dead deposit/`zenodo-version-update.py` path is
   retired — pipeline#345). Concepts: main **1205166**, products **10946933**;
@@ -130,14 +137,19 @@ the phases below, not done-criteria.
 
 Authoritative ordering (Zenodo already done in Phase 4):
 
-1. Copy tree → **`go-data-product-release`** (dated, e.g. `/$DATE`) + build indexes. 🔨
-2. Copy tree → **`go-data-product-current`** + build indexes. 🔨
+1. Copy tree (minus `internal/`) → **`go-data-product-release`** (dated, e.g. `/$DATE`) + build indexes. 🔨
+2. Copy tree (minus `internal/`) → **`go-data-product-current`** + build indexes. 🔨
 3. **CloudFront invalidation** — current **E3Q4YIZHZL7358**, release **E2HF1DWYYDLTQP**. 🔨
 
 Details / dependencies:
-- Index generation reuses the existing go-site tools as-is: `directory_indexer.py`
-  (per-dir `index.html`, needs `-x`), `bucket-indexer.py` (release-bucket top-level
-  `index.html`). Acknowledged as not ideal; kept for now.
+- **Index generation (#22)** runs in the pipeline over the **local** skyhook tree:
+  `directory_indexer.py` per-dir (near-instant; `-u` for the dated release tree)
+  + `bucket-indexer.py` for the release-root catalog; `internal/` is **not**
+  indexed. The slow legacy piece was the `aws-js-s3-explorer` SPA walk
+  (`s3_add_*` recursively re-indexes the *whole* bucket every release ≈ 45 min);
+  retiring it for the fast static path + a richer listing is the **optional** #23.
+  Fallback: run the finalization indexer by hand (as before) if the in-pipeline
+  step isn't ready for a given release.
 - Set **Cache-Control** on upload (#9).
 - Pinned renames to land at/with cutover: `release_stats/` #11 🧊,
   `go-cams/index-json/` #12 🧊.
