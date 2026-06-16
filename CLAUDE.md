@@ -316,6 +316,18 @@ upstream that can remove files, and make stages that read a possibly-dirty
 mirror tolerant of stale names (the annotation stage matches only the new
 `*-uniprot`/`*-mod` globs).
 
+**How that works — and how to publish a new dir.** `$WORKSPACE/mnt` is an
+**sshfs mount of skyhook's `/home/skyhook`** (`Jenkinsfile` `initialize()`, the
+`sshfs … $WORKSPACE/mnt` line), so `initialize()`'s `rm -r -f` *and* its
+`mkdir -p $WORKSPACE/mnt/$JOB_NAME/<dir>` skeleton lines act **directly on
+skyhook**. That skeleton is why a producing stage can `scp` into a dir that
+"already exists" (e.g. a stage does `scp … reports/go-cam/` relying on
+`initialize()` having made it). So **to publish a new directory, add a
+`mkdir -p $WORKSPACE/mnt/$JOB_NAME/<newdir>` line in `initialize()`** next to its
+siblings — a Jenkinsfile change, so it lands via a full build (Scan Repository
+Now), not Restart-from-Stage. (Reverse-engineered 2026-06-16 wiring
+`reports/go-cam-stats`, #27.)
+
 ### Multi-line bash gotchas
 
 - `&&`/`||` must be at the END of a line, never the start
