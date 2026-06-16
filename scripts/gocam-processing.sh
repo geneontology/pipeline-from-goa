@@ -71,7 +71,7 @@ su jenkins -c 'git config --global --add safe.directory /workspace/gocam-py'
 su jenkins -c 'uv sync --all-extras'
 
 # Set up working directory structure.
-su jenkins -c 'mkdir -p /tmp/gocam-work/input /tmp/gocam-work/01-gocam-models /tmp/gocam-work/02-true-gocams /tmp/gocam-work/02-pseudo-gocams /tmp/gocam-work/03-indexed-true-gocams /tmp/gocam-work/04-index-files /tmp/gocam-work/05-browser-search-docs /tmp/gocam-work/reports'
+su jenkins -c 'mkdir -p /tmp/gocam-work/input /tmp/gocam-work/01-gocam-models /tmp/gocam-work/02-true-gocams /tmp/gocam-work/02-pseudo-gocams /tmp/gocam-work/03-indexed-true-gocams /tmp/gocam-work/04-index-files /tmp/gocam-work/05-browser-search-docs /tmp/gocam-work/go-cam-stats /tmp/gocam-work/reports'
 
 # Download and extract Minerva JSON tarball.
 su jenkins -c "wget -q -O /tmp/gocam-work/minerva-models.tar.gz '${MINERVA_JSON_TARBALL_URL}'"
@@ -101,6 +101,11 @@ su jenkins -c 'uv run python pipeline/generate_index_files.py --input-dir /tmp/g
 # Step 5: Generate GO-CAM Browser search docs (1 JSON file).
 su jenkins -c 'uv run python pipeline/generate_go_cam_browser_search_docs.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json --report-file /tmp/gocam-work/reports/05-browser-search.jsonl --verbose'
 
+# Step 6: GO-CAM model statistics (per-model / contributor / provider + aggregate
+# JSON, plus id_to_label.json). Input is the indexed "true"/filtered GO-CAMs
+# (same as Steps 4/5); production models only, by default. gocam-py #218 / #27.
+su jenkins -c 'uv run python pipeline/output_stats_for_gocam_models.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/go-cam-stats --verbose'
+
 # Lastly: Generate summary report (1 Excel file).
 su jenkins -c "uv run python pipeline/generate_log_summary.py --logs-dir /tmp/gocam-work/reports --output /tmp/gocam-work/reports/summary.xlsx --metadata 'Release date=${START_DATE}' --metadata 'Pipeline name=pipeline-from-goa' --metadata 'Pipeline branch=${BRANCH_NAME}' --verbose"
 
@@ -125,6 +130,7 @@ scp_retry "-r" "/tmp/gocam-work/03-indexed-true-gocams/*" "skyhook@${SKYHOOK_MAC
 scp_retry "-r" "/tmp/gocam-work/04-index-files/*"        "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/go-cams/index-json/"
 scp_retry ""   "/tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json" "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/products/go-cam-search/"
 scp_retry "-r" "/tmp/gocam-work/reports/*"               "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/reports/go-cam/"
+scp_retry "-r" "/tmp/gocam-work/go-cam-stats/*"          "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/reports/go-cam-stats/"
 
 # Fix ownership so jenkins user can clean up.
 chown -R "$JENKINS_UID:$JENKINS_GID" /workspace || true

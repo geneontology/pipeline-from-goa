@@ -1149,6 +1149,7 @@ void initialize() {
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/go-cams/json || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/go-cams/index-json || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports/go-cam || true'
+	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/reports/go-cam-stats || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/metadata || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/annotations || true'
 	sh 'mkdir -p $WORKSPACE/mnt/$JOB_NAME/annotations/gaf || true'
