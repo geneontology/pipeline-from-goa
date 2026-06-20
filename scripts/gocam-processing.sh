@@ -106,6 +106,21 @@ su jenkins -c 'uv run python pipeline/generate_go_cam_browser_search_docs.py --i
 # (same as Steps 4/5); production models only, by default. gocam-py #218 / #27.
 su jenkins -c 'uv run python pipeline/output_stats_for_gocam_models.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/go-cam-stats --verbose'
 
+# Step 7: Render the Step 6 stats JSON into HTML/TSV report pages, IN PLACE
+# under go-cam-stats, via go-site's reports-go-cam-stats.py (go-site#2706). It
+# writes named go-cam-*.html pages (go-cam-aggregate-stats.html is the entry
+# point) -- never index.html -- so they coexist with the published JSON and the
+# publish-time directory index. Inputs: go-site templates + users/groups.yaml +
+# our in-pipeline go.json (GO labels + MF/BP/CC). Deps via `uv run --with`. #27.
+su jenkins -c "wget -q -O /tmp/gocam-work/reports-go-cam-stats.py https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/scripts/reports-go-cam-stats.py"
+su jenkins -c "wget -q -O /tmp/gocam-work/go-cam-stats-template.html https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/scripts/go-cam-stats-template.html"
+su jenkins -c "wget -q -O /tmp/gocam-work/go-cam-records-template.html https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/scripts/go-cam-records-template.html"
+su jenkins -c 'mkdir -p /tmp/gocam-work/metadata'
+su jenkins -c "wget -q -O /tmp/gocam-work/metadata/users.yaml https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/metadata/users.yaml"
+su jenkins -c "wget -q -O /tmp/gocam-work/metadata/groups.yaml https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/metadata/groups.yaml"
+su jenkins -c 'wget -q -O /tmp/gocam-work/go.json https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/go.json'
+su jenkins -c "uv run --with click --with pystache --with pyyaml python3 /tmp/gocam-work/reports-go-cam-stats.py --directory /tmp/gocam-work/go-cam-stats --template /tmp/gocam-work/go-cam-stats-template.html --template-records /tmp/gocam-work/go-cam-records-template.html --output /tmp/gocam-work/go-cam-stats --metadata /tmp/gocam-work/metadata --resource /tmp/gocam-work/go.json --date '${START_DATE}'"
+
 # Lastly: Generate summary report (1 Excel file).
 su jenkins -c "uv run python pipeline/generate_log_summary.py --logs-dir /tmp/gocam-work/reports --output /tmp/gocam-work/reports/summary.xlsx --metadata 'Release date=${START_DATE}' --metadata 'Pipeline name=pipeline-from-goa' --metadata 'Pipeline branch=${BRANCH_NAME}' --verbose"
 
