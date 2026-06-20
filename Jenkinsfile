@@ -644,6 +644,40 @@ pipeline {
 	    }
 	}
 
+	stage('Release archives') {
+	    steps {
+		script {
+		    // Final build-half step (build-then-publish): tar the
+		    // finished skyhook tree IN PLACE over ssh into
+		    // internal/release-archives/ -- the two Zenodo subsets
+		    // (reproducible "main" subset + "products"). Runs after all
+		    // product stages so the whole tree is present. internal/ is
+		    // never published; the manual publish tail streams these
+		    // tarballs to Zenodo. Pure read+tar, skyhook key only. #19.
+		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/build-release-archives.sh -o ./scripts/build-release-archives.sh"
+
+		    withCredentials([
+			file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'),
+			string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')
+		    ]) {
+			sh """
+			    docker run --rm \\
+			      --init \\
+			      --mount type=tmpfs,destination=/tmp \\
+			      -u root:root \\
+			      -v "\$WORKSPACE":/workspace \\
+			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \\
+			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \\
+			      -e JENKINS_UID="\$JENKINS_UID" \\
+			      -e JENKINS_GID="\$JENKINS_GID" \\
+			      ubuntu:noble \\
+			      bash /workspace/scripts/build-release-archives.sh
+			"""
+		    }
+		}
+	    }
+	}
+
 	// //...
 	// stage('Sanity II') {
 	//     when { anyOf { branch 'release' } }
