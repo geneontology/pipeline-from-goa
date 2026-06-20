@@ -318,11 +318,30 @@ capacity = **operations#82**; date-gate + umbrella = **#1**; consumer file-path
 contracts = **#3**.
 
 ### Track A — Readiness gates (must be green before T‑0)
-- **Publish/bless tail built — the critical path.** Today the pipeline builds to
-  skyhook but cannot publish to S3. Net-new (Phases 4–5; operations#83
-  work-item-1): assemble archive tarball(s) → Zenodo DOI (#19) →
-  `release-archive-doi.json` → copy to `go-data-product-release` (dated) → copy
-  to `go-data-product-current` → CloudFront invalidate → indexes. 🔨
+- **Publish/bless tail built — the critical path** (Phases 4–5; operations#83
+  work-item-1). ✅ **Built as hand-run scripts** (the build/publish split):
+  `build-release-archives.sh` (wired as the "Release archives" build stage) →
+  `zenodo-archive-upload.py` → `publish-to-s3.sh` (the six-step
+  index/copy/capper/invalidate), driven by the repo-root `justfile`;
+  dry-run-validated end-to-end and adversarially reviewed (three no-context passes).
+  `internal/` excluded via go-site `--exclude` (#2710 merged), overlay-only push
+  (legacy `s3-uploader.py` Content-Types), Zenodo-before-publish guard. A future
+  automated Jenkins Publish stage is scaffolded **disabled/commented**. **Not yet
+  run for real** — the remaining gates are operational, below. 🟡
+- **Zenodo production rehearsal (#19).** Before the first real mint, run
+  `--production --no-publish` for **both** concepts (`just zenodo-rehearse-main` /
+  `-products`), review the unpublished drafts in the Zenodo UI, then discard — the
+  only step that **cannot** be sandbox-tested (legacy-origin concepts predate
+  InvenioRDM). Procedure + checklist: **docs/zenodo-archival.md**. 🔨(operator)
+- **Run on skyhook + the job-name invariant.** Run the hand-run tail ON the skyhook
+  host (so the tree is local). Load-bearing: the multibranch job must stay named
+  `pipeline-from-goa` (branch `main`) so `$JOB_NAME == pipeline-from-goa/main` —
+  `initialize()` cleans `$WORKSPACE/mnt/$JOB_NAME` while every product stage
+  hardcodes `/home/skyhook/pipeline-from-goa/main`; rename the job and the build
+  silently writes a *different* tree than it cleaned (verified equal 2026-06-20). 🟡
+- **Prove a full clean run.** Confirm a from-scratch run yields the complete tree
+  (incl. `products/json/noctua-models-json.tgz`, #17), and fill the `summary.txt`
+  "note software versions" TODO before minting a permanent DOI. 🟡
 - **Consumer-contract parity verified (#3).** Mostly done; #3 holds the checklist. 🟡
 - **Upstream GOA freshness gate (#21).** Confirm the GOA drop is fresh
   (`release_date.txt` advanced vs the last release) before the cutover build —

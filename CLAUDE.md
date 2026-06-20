@@ -302,6 +302,15 @@ hours of pipeline time. Before pushing a Jenkinsfile change:
 - Verify any new credentials IDs are correct
 - Consider whether the change can be moved into a script instead
   (scripts are cheap to iterate, the Jenkinsfile is expensive)
+- You cannot pre-validate the syntax: the declarative-linter endpoint
+  (`build.geneontology.io/pipeline-model-converter/validate`) is blocked by
+  Cloudflare's WAF (the `docker run`/`sh` body trips it, returns the "you have
+  been blocked" page). So mirror a known-good stage exactly, sanity-check `{`/`}`
+  balance, and treat the next Scan/build as the real syntax check.
+- To scaffold a stage you don't want to run yet, **comment it out** (`/* ... */`
+  or `//`) — zero parse-risk — rather than gating it live with
+  `when { expression { return false } }`: you can't lint the gated version, and a
+  syntax slip there breaks *every* build until fixed.
 
 ### Run cleanup: skyhook self-cleans, S3 does not
 
