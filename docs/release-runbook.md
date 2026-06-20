@@ -138,19 +138,23 @@ granularity is chosen for Restart-from-Stage recovery.
   authoritative order —
   1. **Zenodo** — upload both tarballs from skyhook (run the uploader *on*
      skyhook, streaming from local disk) → mint DOIs → write
-     `metadata/release-archive-doi.json` into the tree. ⚠️ **Not idempotent**
-     (each run mints a new version) — needs a *skip-if-a-version-for-this-date-
-     already-exists* guard before it is safe to Restart-from-Stage; otherwise a
-     restart double-mints.
+     `metadata/release-archive-doi.json` into the tree. **A new version on each
+     concept per publish is the intended design** (one Zenodo version per
+     release), not something to "guard" against. The only rule is: **run the mint
+     only when you actually intend to publish** — so the Jenkins stage stays gated
+     OFF and minting is a deliberate hand-run step (`just zenodo-mint-*`). A
+     re-run/Restart would mint *another* version (recoverable, not corrupting), so
+     just don't re-run the mint unless you mean to.
   2. Copy tree (minus `internal/`) → release bucket (dated) + indexes.
   3. Copy tree (minus `internal/`) → current bucket + indexes.
   4. `go-public` pushes (per-model Minerva JSON #24; union GAFs).
   5. CloudFront invalidation (current + release).
 
-Stages 2–5 are **idempotent** (S3 sync, index regen, CloudFront) — safe to
-restart freely; only stage 1 (Zenodo) needs the guard. The DOI file and the
-per-destination indexes are **publish-generated** (they can't exist before
-bless) — the one nuance to "everything on skyhook first".
+Stages 2–5 are **idempotent** (S3 sync, index regen, CloudFront) — safe to restart
+freely. Stage 1 (Zenodo) deliberately mints a new version each publish — protect it
+by *not running it unless publishing*, not by a guard. The DOI file and the
+per-destination indexes are **publish-generated** (they can't exist before bless) —
+the one nuance to "everything on skyhook first".
 
 ## Phase 4 — Bless → Archive (mint the DOI first) — #19
 
