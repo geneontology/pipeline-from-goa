@@ -185,7 +185,11 @@ the tree **bind-mounted** (still local — not sshfs).
   DOI minted **first** so it can be referenced elsewhere. Validated end-to-end on
   the Zenodo **sandbox** (the real 10.70 GiB golr tarball through the actual
   script + a 12 GiB synthetic PUT, byte-exact commits); production is an explicit
-  `--production` opt-in, still to be wired into a bless stage and run. 🟡
+  `--production` opt-in. **GATING before the first real mint:** rehearse with
+  `--production --no-publish` for **both** concepts (`just zenodo-rehearse-main` /
+  `zenodo-rehearse-products`), review the unpublished drafts in the Zenodo UI, then
+  discard them — this is the only part that **cannot** be sandbox-tested (legacy-origin
+  concept metadata). Full procedure + checklist: **docs/zenodo-archival.md**. 🟡
 - Write `metadata/release-archive-doi.json` (the uploader's `--output`, shape
   `{"doi": ...}`) back into the tree (it travels *in* the published products). 🟡
 - BDBag remote-file manifest — optional, was in old Archive. 🔨(optional)

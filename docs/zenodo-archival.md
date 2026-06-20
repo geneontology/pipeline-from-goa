@@ -20,24 +20,55 @@ The split is a deliberate choice (clean reproducible-vs-products sets,
 independent restart-on-fail, parallelizable) — **not** a size limit (see
 Validated). Tokens: sandbox `$ZENODO_SANDBOX_TOKEN`, production `$ZENODO_TOKEN`.
 
-## Safe first-production-run procedure
+## Production rehearsal (GATING step before the first real bless)
 
 The "new version on a **legacy-origin** concept" path cannot be fully rehearsed
 on sandbox: the real GO concepts predate Zenodo's InvenioRDM migration and are
 legacy-serialized, whereas any sandbox concept we create is InvenioRDM-native.
-The script defends against this by sending a **complete** metadata block (so it
-doesn't matter whether the new-version draft inherits or blanks metadata), but
-the first real run should still be eyeballed:
+The script defends against this by re-supplying a **complete** metadata block, but
+the first production run must still be eyeballed with `--no-publish` first.
 
-1. Run `--production --no-publish`. Creates the new-version draft, uploads and
-   commits the file, but does **not** publish.
-2. Review the draft in the Zenodo UI (`https://zenodo.org/uploads/<id>`):
-   metadata reused correctly, file present and the right size.
-3. Publish from the UI, or re-run without `--no-publish`. **Publishing mints the
-   DOI and is irreversible** — a published record cannot be deleted (see
-   Gotchas).
-4. The DOI is written to `--output` as `{"doi": ...}`, for
-   `metadata/release-archive-doi.json`.
+`--production --no-publish` runs the WHOLE production path — resolve the concept,
+create the new-version draft, reuse + set metadata, clear inherited files, stream +
+commit ours (with a post-commit size check) — and stops **before** the irreversible
+publish, printing a reviewable draft URL. It mints **no** DOI and writes no `--output`.
+
+Run it ON skyhook (the tarballs + `summary.txt` are local there), production token
+set, for **both** concepts:
+
+    export ZENODO_TOKEN=<PRODUCTION token>     # NOT $ZENODO_SANDBOX_TOKEN
+
+    just zenodo-rehearse-main        # concept 1205166, go-release-archive.tgz
+    just zenodo-rehearse-products    # concept 10946933, go-release-products.tgz
+
+    # (equivalently, by hand:)
+    #   python3 scripts/zenodo-archive-upload.py --production --no-publish \
+    #     --concept 1205166 \
+    #     --file /home/skyhook/pipeline-from-goa/main/internal/release-archives/go-release-archive.tgz \
+    #     --version-from /home/skyhook/pipeline-from-goa/main/summary.txt
+
+Each run prints `DRAFT READY (unpublished): https://zenodo.org/uploads/<id>`. Open it
+and verify:
+
+- [ ] **No error.** The run completing at all means `sanitize_metadata` accepted the
+      legacy concept's native serialization — the one thing sandbox cannot prove.
+- [ ] **Title** is the concept's title (reused, not blanked).
+- [ ] **Creators** present (count matches the script's `creators=N` line).
+- [ ] **Version** == the release date (from `summary.txt` "Start date:").
+- [ ] **Resource type / rights / license** look right.
+- [ ] The **file** is attached, right name, right **size** (the script already
+      size-verifies on commit; confirm visually too).
+
+Then **discard each draft** (it is unpublished, so deletable): "Delete"/"Discard" in
+the Zenodo UI, or `DELETE /api/records/<id>/draft` (204). Do **not** leave rehearsal
+drafts behind. (A *published* record cannot be deleted — see Gotchas — which is
+exactly why the rehearsal uses `--no-publish`.)
+
+When both drafts look right, the REAL mint is `just zenodo-mint-main` +
+`just zenodo-mint-products` (production; publishes; writes the version DOI into
+`metadata/release-archive-doi.json` / `release-archive-products-doi.json` via
+`--output`). **Publishing mints the DOI and is irreversible** — a published record
+cannot be deleted.
 
 ## Validated (sandbox, 2026-06-05)
 
@@ -74,8 +105,14 @@ the first real run should still be eyeballed:
 - Always test with `--sandbox --no-publish` and delete the draft afterward —
   never leave a multi-GB *published* record on sandbox (you can't remove it).
 
-## Still to build (#19)
+## Status (#19)
 
-- Assemble the archive tarball(s) from the skyhook `main` tree (the uploader's
-  input): decide the main-vs-products partition, then tar each subset.
-- Wire the step into a bless stage (waits on the bless trigger; see runbook).
+- **Archive tarballs — DONE.** `scripts/build-release-archives.sh`, wired as the
+  Jenkinsfile "Release archives" build stage; partition = main (`annotations go-cams
+  metadata ontology release_stats reports`) + `products`, staged in
+  `internal/release-archives/{go-release-archive,go-release-products}.tgz`.
+- **Uploader — DONE + sandbox-validated**; the production path is **rehearsed via
+  `--no-publish`** (above) before the first real mint.
+- **Operator entry point** — the repo-root `justfile` (`zenodo-rehearse-*`,
+  `zenodo-mint-*`); a future automated bless stage is scaffolded (disabled) in the
+  Jenkinsfile.

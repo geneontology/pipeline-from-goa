@@ -11,7 +11,7 @@
 #
 # Bless order (run these ON skyhook, by hand, reviewing between steps).
 # (off-host only: `just mount` first to sshfs the tree; on skyhook the tree is local.)
-#   1. just zenodo-test ...      # OPTIONAL rehearsal on the SANDBOX (needs a SANDBOX concept id)
+#   1. just zenodo-rehearse-main / zenodo-rehearse-products  # PROD --no-publish: upload, review draft in UI, discard (GATING)
 #   2. just zenodo-mint-main     # PROD: mint archive DOI -> metadata/release-archive-doi.json
 #   3. just zenodo-mint-products # PROD: mint the secondary-products DOI
 #   4. just publish-dry          # review the full S3 + CloudFront plan (no mutations)
@@ -52,6 +52,16 @@ unmount:
 # OPTIONAL rehearsal on the Zenodo SANDBOX (needs $ZENODO_SANDBOX_TOKEN + a SANDBOX concept id); never touches production
 zenodo-test file concept:
     python3 {{scripts}}/zenodo-archive-upload.py --sandbox --no-publish --concept {{concept}} --file {{file}} --version-from {{tree}}/summary.txt
+
+# PROD REHEARSAL (GATING): upload the main archive to REAL Zenodo but DON'T publish --
+# leaves a draft version on concept 1205166 for UI review (validates metadata reuse vs
+# the legacy concept). Needs $ZENODO_TOKEN. Discard the draft after review (see docs).
+zenodo-rehearse-main:
+    python3 {{scripts}}/zenodo-archive-upload.py --production --no-publish --concept {{main_concept}} --file {{archive}} --version-from {{tree}}/summary.txt
+
+# PROD REHEARSAL (GATING): same for the secondary-products concept 10946933. Needs $ZENODO_TOKEN.
+zenodo-rehearse-products:
+    python3 {{scripts}}/zenodo-archive-upload.py --production --no-publish --concept {{products_concept}} --file {{products}} --version-from {{tree}}/summary.txt
 
 # PROD: mint the archive DOI and write it into the tree (needs $ZENODO_TOKEN). IRREVERSIBLE.
 zenodo-mint-main:
