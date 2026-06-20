@@ -130,8 +130,9 @@ granularity is chosen for Restart-from-Stage recovery.
 
 - **Build segment (production):** the existing product stages, plus — per-model
   Minerva JSON staged into `internal/` (#24, folded into the GO-CAM stage) and,
-  **last**, `build-release-archives.sh` (needs every product on skyhook) tarring
-  the two subsets into `internal/release-archives/`.
+  **last**, the now-wired **`Release archives`** stage running
+  `build-release-archives.sh` (needs every product on skyhook) tarring the two
+  subsets into `internal/release-archives/`.
 - **— bless gate (hard divide) —**
 - **Publication segment:** fine-grained stages (each a restart point), in the
   authoritative order —
@@ -158,7 +159,9 @@ bless) — the one nuance to "everything on skyhook first".
 
 - Build the release archive tarball(s) from the skyhook `main` tree (**excluding
   `internal/`**) — two archives, the reproducible "main" subset + the larger
-  "secondary products" (golr-dominated) subset. 🔨
+  "secondary products" (golr-dominated) subset. ✅ **Wired** as the final build
+  stage `Release archives` (`scripts/build-release-archives.sh`) → tarballs land
+  in `internal/release-archives/`, staged for the (manual) publish tail.
 - Zenodo versioned push → **mint DOI**, via `scripts/zenodo-archive-upload.py`
   (InvenioRDM Records API; the dead deposit/`zenodo-version-update.py` path is
   retired — pipeline#345). Concepts: main **1205166**, products **10946933**;
