@@ -91,6 +91,7 @@ CURRENT_HOST="http://current.geneontology.org"
 EXECUTE=0          # 0 = dry-run (default), 1 = actually mutate
 ASSUME_YES=0
 KEEP_INTERNAL_LINK=0  # 1 = don't relocate internal/ (accept a dangling index link)
+ALLOW_MISSING_DOI=0   # 1 = allow --execute without metadata/release-archive-doi.json present
 
 log()  { echo "[publish-to-s3] $*"; }
 die()  { echo "[publish-to-s3] ERROR: $*" >&2; exit 1; }
@@ -111,6 +112,7 @@ Options:
   --release-bucket NAME  Default: go-data-product-release.
   --current-bucket NAME  Default: go-data-product-current.
   --keep-internal-link   Don't relocate internal/ during --execute (accept a dangling index link).
+  --allow-missing-doi    Allow --execute even if metadata/release-archive-doi.json is absent.
   --execute              ACTUALLY MUTATE. Without this, everything is a dry run.
   --yes                  Skip the interactive confirmation in --execute mode.
   -h, --help             This help.
@@ -128,6 +130,7 @@ while [ $# -gt 0 ]; do
         --release-bucket)  RELEASE_BUCKET="$2"; shift 2;;
         --current-bucket)  CURRENT_BUCKET="$2"; shift 2;;
         --keep-internal-link) KEEP_INTERNAL_LINK=1; shift;;
+        --allow-missing-doi) ALLOW_MISSING_DOI=1; shift;;
         --execute)         EXECUTE=1; shift;;
         --yes)             ASSUME_YES=1; shift;;
         -h|--help)         usage; exit 0;;
@@ -194,6 +197,12 @@ command -v aws >/dev/null 2>&1 || die "missing the aws CLI"
 if [ "$EXECUTE" = 1 ]; then
     python3 -c "import filechunkio" 2>/dev/null \
         || die "real push (s3-uploader.py) needs filechunkio (pip install filechunkio)"
+fi
+
+### Order guard: a real publish must carry the Zenodo DOI in the tree, so enforce
+### Zenodo-before-publish -- never publish current/release without the DOI file.
+if [ "$EXECUTE" = 1 ] && [ "$ALLOW_MISSING_DOI" != 1 ] && [ ! -f "$TREE/metadata/release-archive-doi.json" ]; then
+    die "no $TREE/metadata/release-archive-doi.json -- mint the Zenodo DOI first ('just zenodo-mint-main'), or pass --allow-missing-doi"
 fi
 
 ### Banner.
@@ -290,6 +299,11 @@ maybe_stash_internal() {
 ### --- The six steps (release -> current -> invalidate) ---
 
 maybe_stash_internal
+# Backstop (never publish internal/): in --execute it MUST be gone from the tree
+# before any push -- catches a skipped/failed relocate or --keep-internal-link.
+if [ "$EXECUTE" = 1 ] && [ -d "$TREE/internal" ]; then
+    die "internal/ is still present in the tree -- refusing to publish (it must never be published)"
+fi
 log "STEP 1/6: index for RELEASE"
 index_tree "$RELEASE_HOST/$DATE" "-u"
 log "STEP 2/6: push -> release (dated)"

@@ -39,8 +39,9 @@ default:
 bless-order:
     @sed -n '/^# Bless order/,/just verify/p' {{justfile_directory()}}/justfile | sed 's/^# \{0,1\}//'
 
-# OFF-HOST FALLBACK ONLY (prefer running ON skyhook). Set tree=/tmp/pfg-tree first, then sshfs-mount the remote tree there
+# OFF-HOST FALLBACK ONLY (prefer running ON skyhook). Set skyhook_host=<host> and tree=/tmp/pfg-tree first.
 mount:
+    @[ "{{skyhook_host}}" != "SET-ME" ] || { echo "set skyhook_host=<host> first (off-host fallback only)"; exit 1; }
     mkdir -p {{tree}}
     sshfs -o IdentitiesOnly=true -o IdentityFile={{skyhook_key}} skyhook@{{skyhook_host}}:/home/skyhook/pipeline-from-goa/main {{tree}}
 
