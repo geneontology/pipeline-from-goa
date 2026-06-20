@@ -53,9 +53,15 @@
 # (directory_indexer.py, bucket-indexer.py, s3-uploader.py,
 # directory-index-template.html) is fetched fresh unless --gosite-scripts is given.
 #
-# The tree: point --tree at the built skyhook tree. Mount it first, e.g.:
-#   sshfs -o ro -o IdentityFile=<skyhook_key> skyhook@<host>:/home/skyhook/pipeline-from-goa/main /tmp/pfg-tree
-# (use a read-WRITE mount for --execute, since pass 1/4 write index.html into the tree).
+# WHERE TO RUN: on skyhook itself (the build/storage host == the Jenkins machine),
+# against the LOCAL tree -- point --tree at /home/skyhook/pipeline-from-goa/main.
+# No mount, no copy: the index passes (os.walk + write index.html) and the two
+# pushes (read every file, twice) all hit local disk, and internal/ is relocated
+# with a cheap same-filesystem rename. If skyhook lacks the deps (aws cli,
+# pystache/boto3/filechunkio), run this in a container there with the tree
+# BIND-mounted (-v .../main:/tree) -- still local. Only sshfs-mount as a last
+# resort when running off-host (and then a one-time rsync of the tree beats a
+# mount, since every file is touched multiple times).
 
 set -euo pipefail
 

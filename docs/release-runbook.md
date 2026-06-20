@@ -156,9 +156,14 @@ bless) — the one nuance to "everything on skyhook first".
 
 **Operator entry point:** the repo-root **`justfile`** wraps the whole hand-run
 tail (Phases 4 + 5) in bless order with safe defaults — `just --list` /
-`just bless-order` show it (`mount → zenodo-test → zenodo-mint-main →
-zenodo-mint-products → publish-dry → publish → verify → unmount`). Real mutations
-are only `zenodo-mint-*` and `publish`.
+`just bless-order` show it. **Run it ON skyhook** (the build/storage host == the
+Jenkins machine): the tree is on local disk there, so there is **no mount and no
+copy** — sshfs would turn every file-touch (two index passes + two full pushes)
+into a network round-trip, and the tree is read twice. `just`'s `tree` defaults to
+`/home/skyhook/pipeline-from-goa/main`; `mount`/`unmount` are an **off-host fallback
+only**. Real mutations are only `zenodo-mint-*` and `publish`. Deps on skyhook: aws
+cli + python (pystache/boto3/filechunkio); if absent, run in a container there with
+the tree **bind-mounted** (still local — not sshfs).
 
 *Run-level detail — API gotchas + the safe first-production-run procedure:
 **docs/zenodo-archival.md**.*

@@ -1,7 +1,9 @@
 # Publish tail (the "bless") for pipeline-from-goa -- operator recipes.
 #
-# HAND-RUN, human-gated, in order. The build half (Jenkins) has already put the
-# release tree on skyhook and staged the archive tarballs in
+# HAND-RUN, human-gated, in order. RUN THESE ON SKYHOOK (the build/storage host ==
+# the Jenkins machine): the release tree is already on its local disk, so there is
+# no mount and no copy -- `tree` below is that local path. The build half (Jenkins)
+# has already put the tree there and staged the archive tarballs in
 # internal/release-archives/. These recipes are SAFE BY DEFAULT: bare `just`
 # lists them; `zenodo-test` is sandbox-only; `publish-dry` mutates nothing. The
 # only real mutations are `zenodo-mint-*` (mints DOIs) and `publish` (which
@@ -18,7 +20,7 @@
 
 # --- config (override on the CLI, e.g. `just tree=/mnt/skyhook/... publish-dry`) ---
 scripts          := justfile_directory() / "scripts"
-tree             := "/tmp/pfg-tree"                                                          # mounted skyhook .../main
+tree             := "/home/skyhook/pipeline-from-goa/main"                                   # LOCAL tree on skyhook (run recipes ON skyhook)
 creds            := env_var('HOME') / "local/share/secrets/bbop/aws/s3/aws-go-push.json"     # AWS push creds JSON
 skyhook_host     := "SET-ME"                                                                 # the private SKYHOOK_MACHINE ssh host
 skyhook_key      := env_var('HOME') / "local/share/secrets/bbop/ssh-keys/id_rsa_nopass.skyhook"
@@ -36,12 +38,12 @@ default:
 bless-order:
     @sed -n '/^# Bless order/,/just verify/p' {{justfile_directory()}}/justfile | sed 's/^# \{0,1\}//'
 
-# mount the skyhook release tree read-WRITE at {{tree}} (publish writes index.html into it)
+# OFF-HOST FALLBACK ONLY (prefer running ON skyhook). Set tree=/tmp/pfg-tree first, then sshfs-mount the remote tree there
 mount:
     mkdir -p {{tree}}
     sshfs -o IdentitiesOnly=true -o IdentityFile={{skyhook_key}} skyhook@{{skyhook_host}}:/home/skyhook/pipeline-from-goa/main {{tree}}
 
-# unmount the skyhook tree
+# unmount the off-host sshfs mount
 unmount:
     fusermount -u {{tree}}
 
