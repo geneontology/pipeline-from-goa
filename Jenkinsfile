@@ -678,6 +678,49 @@ pipeline {
 	    }
 	}
 
+	// DISABLED publish stage -- COMMENTED OUT so it cannot run. To enable: remove the
+	// /* ... */ wrapper AND flip the `when` gate. See scripts/publish-stage.sh and
+	// docs/release-runbook.md. #19.
+	/*
+	stage('Publish (DISABLED)') {
+	    // DISABLED: the Phase-5 S3/CloudFront publish as a Jenkins stage. GATED OFF
+	    // -- `when { expression { return false } }` means it can NEVER run until
+	    // someone edits that to a real condition. It runs publish-to-s3.sh with
+	    // --execute (LIVE mutations), so the gate is the only safety. Mirrors the
+	    // dual-use design (scripts/publish-to-s3.sh "DUAL-USE"): a thin wrapper
+	    // (publish-stage.sh) installs deps + drops to the jenkins UID/GID; the LOCAL
+	    // skyhook tree is bind-mounted (assumes the agent runs on skyhook); the creds
+	    // JSON is mounted. The tree's PARENT is mounted so the script's internal/
+	    // relocate works -- once go-site #2710 (--exclude) lands, just .../main. #19.
+	    when { expression { return false } }
+	    steps {
+		script {
+		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/publish-stage.sh -o ./scripts/publish-stage.sh && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/publish-to-s3.sh -o ./scripts/publish-to-s3.sh"
+
+		    withCredentials([
+			file(credentialsId: 'aws_go_push_json', variable: 'S3_PUSH_JSON')
+		    ]) {
+			sh """
+			    docker run --rm \\
+			      --init \\
+			      --mount type=tmpfs,destination=/tmp \\
+			      -u root:root \\
+			      -v "\$WORKSPACE":/workspace \\
+			      -v /home/skyhook/pipeline-from-goa:/work \\
+			      -v "\$S3_PUSH_JSON":/secrets/aws-push.json:ro \\
+			      -e JENKINS_UID="\$JENKINS_UID" \\
+			      -e JENKINS_GID="\$JENKINS_GID" \\
+			      -e TREE=/work/main \\
+			      -e TARGET_GO_SITE_BRANCH="\$TARGET_GO_SITE_BRANCH" \\
+			      ubuntu:noble \\
+			      bash /workspace/scripts/publish-stage.sh
+			"""
+		    }
+		}
+	    }
+	}
+	*/
+
 	// //...
 	// stage('Sanity II') {
 	//     when { anyOf { branch 'release' } }
