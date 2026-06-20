@@ -15,11 +15,9 @@
 #
 # Required env:    JENKINS_UID, JENKINS_GID, TREE, TARGET_GO_SITE_BRANCH
 # Required mounts: /workspace (with scripts/), /secrets/aws-push.json (creds JSON),
-#                  and the LOCAL skyhook tree bind-mounted such that TREE points at
-#                  it AND its parent is writable (publish-to-s3.sh relocates
-#                  internal/ aside -- a same-filesystem rename). Once go-site #2710
-#                  (directory_indexer/s3-uploader --exclude) lands and publish-to-s3.sh
-#                  switches to --exclude, only TREE itself needs mounting.
+#                  and the LOCAL skyhook tree bind-mounted with TREE pointing at it.
+#                  (publish-to-s3.sh excludes internal/ via the go-site --exclude
+#                  flag now, so no parent mount or relocate is needed.)
 
 set -euo pipefail
 

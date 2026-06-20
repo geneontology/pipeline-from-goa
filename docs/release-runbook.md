@@ -230,12 +230,12 @@ Details / dependencies:
     `go-data-product-current` objects (the OLD pipeline's files) are **preserved**, so
     `current.geneontology.org` keeps serving prior files via CloudFront through the
     cutover (the Track-B contract). Pruning stale objects is deferred.
-  - **`internal/` exclusion.** Neither `directory_indexer.py` nor `s3-uploader.py` has
-    an `--exclude`, so the script relocates `internal/` out of the tree during
-    `--execute` (needs the tree's parent writable, i.e. mount `/home/skyhook`);
-    otherwise it would both upload it and emit a dangling `internal/` index link.
-    **Cleaner fix planned:** add an `--exclude` flag to both go-site scripts and drop
-    the relocation.
+  - **`internal/` exclusion.** Both go-site tools are passed **`--exclude internal`**
+    (go-site PR #2710, merged) — `directory_indexer` prunes it from the walk (no
+    listing, no dangling link) and `s3-uploader` skips it on upload, the same way in
+    dry-run and execute. `publish-to-s3.sh` refuses to run if a fetched tool lacks
+    `--exclude` (rather than silently publishing `internal/`). The earlier
+    relocate-aside `mv` workaround is gone.
 - **Why two indexer passes (the crux — #22).** `directory_indexer.py` bakes an
   **absolute URL prefix** into every `index.html` (`current.geneontology.org` vs
   `release.geneontology.org/$DATE`). The same on-disk tree therefore **cannot** be

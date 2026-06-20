@@ -28,6 +28,14 @@
 # index.html written to the tree); bucket-indexer is read-only (list_objects) and
 # always runs for real.
 #
+# internal/ EXCLUSION: internal/ (build staging -- archive tarballs, etc.) must
+# NEVER be published or appear in any index. Both go-site tools are passed
+# `--exclude internal`: directory_indexer prunes it from the walk (no listing, no
+# dangling link), s3-uploader skips it on upload. Same mechanism in dry-run and
+# execute, so the two agree. A fetch-time backstop refuses to run if either tool
+# lacks --exclude (rather than silently publishing internal/). (The dry-run aws-sync
+# preview separately uses --exclude "internal/*".)
+#
 # OVERLAY-ONLY / FIRST ROLLOUT: the push never deletes. Existing objects in
 # go-data-product-current (the OLD pipeline's files) are PRESERVED -- required for
 # the initial cutover so current.geneontology.org keeps serving prior files via
@@ -42,7 +50,8 @@
 #
 # Zenodo (Phase 4: mint the DOI + write metadata/release-archive-doi.json) is a
 # SEPARATE, EARLIER step -- scripts/zenodo-archive-upload.py -- run before this.
-# This script does not touch Zenodo.
+# This script does not touch Zenodo (but refuses --execute unless the DOI file is
+# already in the tree -- enforcing Zenodo-before-publish).
 #
 # This is a HAND-RUN operator script (the build/publish split keeps the mutating
 # tail out of the automated Jenkins build), not a Jenkins stage.
@@ -67,12 +76,11 @@
 # WHERE TO RUN: on skyhook itself (the build/storage host == the Jenkins machine),
 # against the LOCAL tree -- point --tree at /home/skyhook/pipeline-from-goa/main.
 # No mount, no copy: the index passes (os.walk + write index.html) and the two
-# pushes (read every file, twice) all hit local disk, and internal/ is relocated
-# with a cheap same-filesystem rename. If skyhook lacks the deps (aws cli,
-# pystache/boto3/filechunkio), run this in a container there with the tree
-# BIND-mounted (-v .../main:/tree) -- still local. Only sshfs-mount as a last
-# resort when running off-host (and then a one-time rsync of the tree beats a
-# mount, since every file is touched multiple times).
+# pushes (read every file, twice) all hit local disk. If skyhook lacks the deps
+# (aws cli, pystache/boto3/filechunkio), run this in a container there with the tree
+# BIND-mounted (-v .../main:/tree) -- still local. Only sshfs-mount as a last resort
+# when running off-host (and then a one-time rsync of the tree beats a mount, since
+# every file is touched multiple times).
 
 set -euo pipefail
 
@@ -90,7 +98,6 @@ RELEASE_HOST="http://release.geneontology.org"
 CURRENT_HOST="http://current.geneontology.org"
 EXECUTE=0          # 0 = dry-run (default), 1 = actually mutate
 ASSUME_YES=0
-KEEP_INTERNAL_LINK=0  # 1 = don't relocate internal/ (accept a dangling index link)
 ALLOW_MISSING_DOI=0   # 1 = allow --execute without metadata/release-archive-doi.json present
 
 log()  { echo "[publish-to-s3] $*"; }
@@ -111,7 +118,6 @@ Options:
   --gosite-scripts DIR   Use local go-site scripts dir instead of fetching.
   --release-bucket NAME  Default: go-data-product-release.
   --current-bucket NAME  Default: go-data-product-current.
-  --keep-internal-link   Don't relocate internal/ during --execute (accept a dangling index link).
   --allow-missing-doi    Allow --execute even if metadata/release-archive-doi.json is absent.
   --execute              ACTUALLY MUTATE. Without this, everything is a dry run.
   --yes                  Skip the interactive confirmation in --execute mode.
@@ -129,7 +135,6 @@ while [ $# -gt 0 ]; do
         --gosite-scripts)  GOSITE_SCRIPTS="$2"; shift 2;;
         --release-bucket)  RELEASE_BUCKET="$2"; shift 2;;
         --current-bucket)  CURRENT_BUCKET="$2"; shift 2;;
-        --keep-internal-link) KEEP_INTERNAL_LINK=1; shift;;
         --allow-missing-doi) ALLOW_MISSING_DOI=1; shift;;
         --execute)         EXECUTE=1; shift;;
         --yes)             ASSUME_YES=1; shift;;
@@ -150,18 +155,7 @@ echo "$DATE" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' || die "date not YYYY-MM-
 
 ### Get the go-site tooling in hand.
 WORK="$(mktemp -d)"
-STASHED=0
-ASIDE="$(dirname "$TREE")/.pfg-internal-aside.$$"
-cleanup() {
-    if [ "$STASHED" = 1 ] && [ -d "$ASIDE" ]; then
-        if mv "$ASIDE" "$TREE/internal"; then
-            log "Restored internal/ into the tree."
-        else
-            log "WARNING: could not restore internal/ from $ASIDE -- move it back by hand!"
-        fi
-    fi
-    rm -rf "$WORK"
-}
+cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
 if [ -n "$GOSITE_SCRIPTS" ]; then
     DINDEXER="$GOSITE_SCRIPTS/directory_indexer.py"
@@ -180,6 +174,12 @@ else
     TEMPLATE="$WORK/directory-index-template.html"
 fi
 [ -f "$CREDS" ] || die "creds JSON not found: $CREDS"
+
+### Backstop: internal/ exclusion depends on the go-site tools supporting --exclude
+### (that is how internal/ is kept out of BOTH the index and the push). If a fetched
+### tool lacks it, REFUSE -- never silently publish internal/.
+grep -q -- '--exclude' "$DINDEXER" || die "fetched directory_indexer.py lacks --exclude (go-site too old?) -- refusing"
+grep -q -- '--exclude' "$SUPLOADER" || die "fetched s3-uploader.py lacks --exclude (go-site too old?) -- refusing"
 
 ### Use the push creds for the aws cli too (one credential source).
 AWS_ACCESS_KEY_ID="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['accessKeyId'])" "$CREDS")"
@@ -216,6 +216,7 @@ cat <<BANNER
   release:         s3://$RELEASE_BUCKET/$DATE/   (CF $RELEASE_CF, $RELEASE_HOST)
   current:         s3://$CURRENT_BUCKET/         (CF $CURRENT_CF, $CURRENT_HOST)
   push mode:       overlay-only (never deletes; preserves existing objects)
+  internal/:       excluded from index + push (go-site --exclude)
 ========================================================================
 BANNER
 
@@ -230,9 +231,9 @@ fi
 index_tree() { # $1=prefix  $2=up-flag(""/"-u")
     local prefix="$1" up="$2" xflag="" note="dry: no index.html written"
     if [ "$EXECUTE" = 1 ]; then xflag="-x"; note="writing index.html into tree"; fi
-    log "Indexing tree: prefix='$prefix' ${up:+up=yes }($note)"
+    log "Indexing tree: prefix='$prefix' ${up:+up=yes }($note; --exclude internal)"
     # shellcheck disable=SC2086
-    python3 "$DINDEXER" -v --inject "$TEMPLATE" --directory "$TREE" --prefix "$prefix" $xflag $up >/dev/null
+    python3 "$DINDEXER" -v --inject "$TEMPLATE" --directory "$TREE" --prefix "$prefix" --exclude internal $xflag $up >/dev/null
 }
 
 push_tree() { # $1=s3 dest (bucket[/path])
@@ -240,11 +241,10 @@ push_tree() { # $1=s3 dest (bucket[/path])
     if [ "$EXECUTE" = 1 ]; then
         # Real push: legacy go-site s3-uploader.py -- controlled Content-Types
         # (MIME map, default text/plain) and OVERLAY-ONLY (never deletes, so
-        # existing/old objects are preserved). internal/ is already relocated
-        # aside (maybe_stash_internal), so it is not walked/uploaded.
-        log "Push (s3-uploader.py, legacy MIME map, overlay-only) -> s3://$dest/"
+        # existing/old objects are preserved). internal/ is skipped via --exclude.
+        log "Push (s3-uploader.py, legacy MIME map, overlay-only, --exclude internal) -> s3://$dest/"
         python3 "$SUPLOADER" -v --credentials "$CREDS" --directory "$TREE" \
-            --bucket "$dest" --number "$DATE" --pipeline pipeline-from-goa >/dev/null
+            --bucket "$dest" --exclude internal --number "$DATE" --pipeline pipeline-from-goa >/dev/null
     else
         # Dry preview only: the file delta vs S3 (read-only). internal/ excluded.
         log "DRY-RUN push preview (aws s3 sync --dryrun) -> s3://$dest/ (exclude internal/*)"
@@ -275,35 +275,8 @@ invalidate() { # $1=cf-id  $2=label
     fi
 }
 
-maybe_stash_internal() {
-    # internal/ must never be published AND must not appear in the directory
-    # index. Neither directory_indexer.py nor s3-uploader.py has an --exclude, so
-    # relocate internal/ out of the tree for the --execute run (index + real push
-    # both then skip it). The dry-run aws-sync preview uses --exclude internal/*
-    # instead. (A go-site --exclude flag would let us drop this relocation.)
-    [ -d "$TREE/internal" ] || return 0
-    if [ "$KEEP_INTERNAL_LINK" = 1 ]; then
-        log "WARNING: --keep-internal-link: internal/ will be a DANGLING link in the published index."
-        return 0
-    fi
-    if [ "$EXECUTE" = 1 ]; then
-        log "Relocating internal/ out of the indexed tree -> $ASIDE"
-        mv "$TREE/internal" "$ASIDE" \
-            || die "could not relocate internal/ (is $(dirname "$TREE") writable? mount /home/skyhook). Use --keep-internal-link to override."
-        STASHED=1
-    else
-        log "DRY-RUN: would relocate internal/ out of the tree for --execute (left in place here; push still excludes internal/*)."
-    fi
-}
-
 ### --- The six steps (release -> current -> invalidate) ---
 
-maybe_stash_internal
-# Backstop (never publish internal/): in --execute it MUST be gone from the tree
-# before any push -- catches a skipped/failed relocate or --keep-internal-link.
-if [ "$EXECUTE" = 1 ] && [ -d "$TREE/internal" ]; then
-    die "internal/ is still present in the tree -- refusing to publish (it must never be published)"
-fi
 log "STEP 1/6: index for RELEASE"
 index_tree "$RELEASE_HOST/$DATE" "-u"
 log "STEP 2/6: push -> release (dated)"

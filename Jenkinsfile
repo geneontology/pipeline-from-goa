@@ -690,8 +690,8 @@ pipeline {
 	    // dual-use design (scripts/publish-to-s3.sh "DUAL-USE"): a thin wrapper
 	    // (publish-stage.sh) installs deps + drops to the jenkins UID/GID; the LOCAL
 	    // skyhook tree is bind-mounted (assumes the agent runs on skyhook); the creds
-	    // JSON is mounted. The tree's PARENT is mounted so the script's internal/
-	    // relocate works -- once go-site #2710 (--exclude) lands, just .../main. #19.
+	    // JSON is mounted. The LOCAL tree is bind-mounted at /tree (internal/ is
+	    // excluded via the go-site --exclude flag, so no parent mount / relocate). #19.
 	    when { expression { return false } }
 	    steps {
 		script {
@@ -706,11 +706,11 @@ pipeline {
 			      --mount type=tmpfs,destination=/tmp \\
 			      -u root:root \\
 			      -v "\$WORKSPACE":/workspace \\
-			      -v /home/skyhook/pipeline-from-goa:/work \\
+			      -v /home/skyhook/pipeline-from-goa/main:/tree \\
 			      -v "\$S3_PUSH_JSON":/secrets/aws-push.json:ro \\
 			      -e JENKINS_UID="\$JENKINS_UID" \\
 			      -e JENKINS_GID="\$JENKINS_GID" \\
-			      -e TREE=/work/main \\
+			      -e TREE=/tree \\
 			      -e TARGET_GO_SITE_BRANCH="\$TARGET_GO_SITE_BRANCH" \\
 			      ubuntu:noble \\
 			      bash /workspace/scripts/publish-stage.sh
