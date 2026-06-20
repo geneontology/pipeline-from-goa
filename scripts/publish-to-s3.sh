@@ -18,12 +18,27 @@
 # buckets -- it must be re-indexed per destination.
 #
 # DRY-RUN BY DEFAULT. The three real mutations happen only with --execute:
-#   - the two `aws s3 sync` pushes (dry-run uses --dryrun: list+diff, no writes)
+#   - the two pushes -- legacy go-site s3-uploader.py (the OLD pipeline's tool;
+#     controlled Content-Types via its MIME map, default text/plain; OVERLAY-ONLY,
+#     it never deletes). In dry-run the push is previewed read-only with
+#     `aws s3 sync --dryrun` instead (shows the file delta vs S3; no writes).
 #   - the capper index.html PUT to the release bucket root (skipped in dry-run)
 #   - the CloudFront invalidations (printed, not issued, in dry-run)
 # directory_indexer runs without -x in dry-run (its own built-in dry mode -> no
 # index.html written to the tree); bucket-indexer is read-only (list_objects) and
 # always runs for real.
+#
+# OVERLAY-ONLY / FIRST ROLLOUT: the push never deletes. Existing objects in
+# go-data-product-current (the OLD pipeline's files) are PRESERVED -- required for
+# the initial cutover so current.geneontology.org keeps serving prior files via
+# CloudFront. Pruning stale objects is deliberately deferred (a later decision).
+#
+# CONTENT-TYPE NOTE: we reuse s3-uploader.py (per CLAUDE.md "don't reinvent the
+# publish tooling") for legacy-faithful Content-Types. Its MIME map defaults to
+# text/plain with overrides (json->application/json, gz->application/gzip,
+# obo->text/obo, owl->application/rdf+xml, ttl->text/turtle, ...). Plain aws s3
+# sync would instead guess application/octet-stream for .gaf/.gpad/.gpi/.obo/.owl/
+# .gz (-> download rather than inline). Revisiting the map is a later improvement.
 #
 # Zenodo (Phase 4: mint the DOI + write metadata/release-archive-doi.json) is a
 # SEPARATE, EARLIER step -- scripts/zenodo-archive-upload.py -- run before this.
@@ -32,10 +47,11 @@
 # This is a HAND-RUN operator script (the build/publish split keeps the mutating
 # tail out of the automated Jenkins build), not a Jenkins stage.
 #
-# Requirements (host-side): aws cli, python3 + pystache + boto3, and AWS push
-# credentials JSON ({"accessKeyId":..., "secretAccessKey":...}). The go-site
-# tooling (directory_indexer.py, bucket-indexer.py, directory-index-template.html)
-# is fetched fresh unless --gosite-scripts is given.
+# Requirements (host-side): aws cli, python3 + pystache + boto3 + filechunkio
+# (s3-uploader.py imports filechunkio), and AWS push credentials JSON
+# ({"accessKeyId":..., "secretAccessKey":...}). The go-site tooling
+# (directory_indexer.py, bucket-indexer.py, s3-uploader.py,
+# directory-index-template.html) is fetched fresh unless --gosite-scripts is given.
 #
 # The tree: point --tree at the built skyhook tree. Mount it first, e.g.:
 #   sshfs -o ro -o IdentityFile=<skyhook_key> skyhook@<host>:/home/skyhook/pipeline-from-goa/main /tmp/pfg-tree
@@ -55,7 +71,6 @@ CURRENT_CF="E3Q4YIZHZL7358"
 RELEASE_CF="E2HF1DWYYDLTQP"
 RELEASE_HOST="http://release.geneontology.org"
 CURRENT_HOST="http://current.geneontology.org"
-DELETE=""          # set to "--delete" to prune stale objects (off by default = legacy parity)
 EXECUTE=0          # 0 = dry-run (default), 1 = actually mutate
 ASSUME_YES=0
 KEEP_INTERNAL_LINK=0  # 1 = don't relocate internal/ (accept a dangling index link)
@@ -78,7 +93,6 @@ Options:
   --gosite-scripts DIR   Use local go-site scripts dir instead of fetching.
   --release-bucket NAME  Default: go-data-product-release.
   --current-bucket NAME  Default: go-data-product-current.
-  --delete               Pass --delete to the s3 syncs (prune stale objects). Off by default.
   --keep-internal-link   Don't relocate internal/ during --execute (accept a dangling index link).
   --execute              ACTUALLY MUTATE. Without this, everything is a dry run.
   --yes                  Skip the interactive confirmation in --execute mode.
@@ -96,7 +110,6 @@ while [ $# -gt 0 ]; do
         --gosite-scripts)  GOSITE_SCRIPTS="$2"; shift 2;;
         --release-bucket)  RELEASE_BUCKET="$2"; shift 2;;
         --current-bucket)  CURRENT_BUCKET="$2"; shift 2;;
-        --delete)          DELETE="--delete"; shift;;
         --keep-internal-link) KEEP_INTERNAL_LINK=1; shift;;
         --execute)         EXECUTE=1; shift;;
         --yes)             ASSUME_YES=1; shift;;
@@ -133,15 +146,17 @@ trap cleanup EXIT
 if [ -n "$GOSITE_SCRIPTS" ]; then
     DINDEXER="$GOSITE_SCRIPTS/directory_indexer.py"
     BINDEXER="$GOSITE_SCRIPTS/bucket-indexer.py"
+    SUPLOADER="$GOSITE_SCRIPTS/s3-uploader.py"
     TEMPLATE="$GOSITE_SCRIPTS/directory-index-template.html"
 else
     log "Fetching go-site tooling from ref '$GOSITE_REF'..."
-    for f in directory_indexer.py bucket-indexer.py directory-index-template.html; do
+    for f in directory_indexer.py bucket-indexer.py s3-uploader.py directory-index-template.html; do
         curl -fsSL "https://raw.githubusercontent.com/geneontology/go-site/${GOSITE_REF}/scripts/$f" -o "$WORK/$f" \
             || die "could not fetch $f from go-site@$GOSITE_REF"
     done
     DINDEXER="$WORK/directory_indexer.py"
     BINDEXER="$WORK/bucket-indexer.py"
+    SUPLOADER="$WORK/s3-uploader.py"
     TEMPLATE="$WORK/directory-index-template.html"
 fi
 [ -f "$CREDS" ] || die "creds JSON not found: $CREDS"
@@ -150,6 +165,12 @@ fi
 AWS_ACCESS_KEY_ID="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['accessKeyId'])" "$CREDS")"
 AWS_SECRET_ACCESS_KEY="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['secretAccessKey'])" "$CREDS")"
 export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+
+### Preflight: the real push tool (s3-uploader.py) imports cleanly (only --execute).
+if [ "$EXECUTE" = 1 ]; then
+    python3 -c "import boto3, filechunkio" 2>/dev/null \
+        || die "real push needs python modules boto3 + filechunkio (pip install boto3 filechunkio)"
+fi
 
 ### Banner.
 MODE="DRY-RUN (no mutations)"; [ "$EXECUTE" = 1 ] && MODE="EXECUTE (LIVE MUTATIONS)"
@@ -161,7 +182,7 @@ cat <<BANNER
   date:            $DATE
   release:         s3://$RELEASE_BUCKET/$DATE/   (CF $RELEASE_CF, $RELEASE_HOST)
   current:         s3://$CURRENT_BUCKET/         (CF $CURRENT_CF, $CURRENT_HOST)
-  delete stale:    ${DELETE:-no}
+  push mode:       overlay-only (never deletes; preserves existing objects)
 ========================================================================
 BANNER
 
@@ -182,11 +203,20 @@ index_tree() { # $1=prefix  $2=up-flag(""/"-u")
 }
 
 push_tree() { # $1=s3 dest (bucket[/path])
-    local dest="$1" dry="--dryrun"
-    [ "$EXECUTE" = 1 ] && dry=""
-    log "Sync tree -> s3://$dest/  (exclude internal/*; ${dry:-LIVE}${DELETE:+ ; $DELETE})"
-    # shellcheck disable=SC2086
-    aws s3 sync "$TREE/" "s3://$dest/" --exclude "internal/*" $DELETE $dry
+    local dest="$1"
+    if [ "$EXECUTE" = 1 ]; then
+        # Real push: legacy go-site s3-uploader.py -- controlled Content-Types
+        # (MIME map, default text/plain) and OVERLAY-ONLY (never deletes, so
+        # existing/old objects are preserved). internal/ is already relocated
+        # aside (maybe_stash_internal), so it is not walked/uploaded.
+        log "Push (s3-uploader.py, legacy MIME map, overlay-only) -> s3://$dest/"
+        python3 "$SUPLOADER" -v --credentials "$CREDS" --directory "$TREE" \
+            --bucket "$dest" --number "$DATE" --pipeline pipeline-from-goa >/dev/null
+    else
+        # Dry preview only: the file delta vs S3 (read-only). internal/ excluded.
+        log "DRY-RUN push preview (aws s3 sync --dryrun) -> s3://$dest/ (exclude internal/*)"
+        aws s3 sync "$TREE/" "s3://$dest/" --exclude "internal/*" --dryrun
+    fi
 }
 
 build_and_put_capper() {
@@ -214,9 +244,10 @@ invalidate() { # $1=cf-id  $2=label
 
 maybe_stash_internal() {
     # internal/ must never be published AND must not appear in the directory
-    # index. The push already excludes internal/* (data safety); this also keeps
-    # the indexer from listing it (a dangling link otherwise). directory_indexer
-    # has no exclude, so relocate internal/ out of the tree for the run.
+    # index. Neither directory_indexer.py nor s3-uploader.py has an --exclude, so
+    # relocate internal/ out of the tree for the --execute run (index + real push
+    # both then skip it). The dry-run aws-sync preview uses --exclude internal/*
+    # instead. (A go-site --exclude flag would let us drop this relocation.)
     [ -d "$TREE/internal" ] || return 0
     if [ "$KEEP_INTERNAL_LINK" = 1 ]; then
         log "WARNING: --keep-internal-link: internal/ will be a DANGLING link in the published index."

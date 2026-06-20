@@ -197,20 +197,30 @@ stage, `Jenkinsfile` **L942–987**, which is the reference implementation:
 Details / dependencies:
 - **Implemented (hand-run) in `scripts/publish-to-s3.sh`** — the standalone Phase-5
   orchestrator for the six steps above, **dry-run by default** (mutations only behind
-  `--execute`; the three real mutations are the two `aws s3 sync` pushes, the capper
-  PUT, and the two CloudFront invalidations). Reuses go-site `directory_indexer.py` +
-  `bucket-indexer.py`. Pseudo-tested end-to-end without any mutation: both indexer
-  passes on a sample tree, the real read-only capper over `go-data-product-release`
-  (248 dated dirs), `aws s3 sync --dryrun`, and the CloudFront IDs validated. Two
-  things baked in from that testing: **(a)** `internal/` is excluded from BOTH the
-  push (`--exclude internal/*`) AND the index — `directory_indexer` has no exclude and
-  would otherwise list `internal/` as a dangling link, so the script relocates it aside
-  during `--execute` (needs the tree's parent writable, i.e. mount `/home/skyhook`);
-  **(b)** the push uses `aws s3 sync`, which *guesses* Content-Type, whereas legacy
-  `s3-uploader.py` set a controlled MIME map (`.obo`/`.gaf`/`.ttl` → `text/plain`) —
-  preserving those Content-Types (a fix-up pass, or keeping `s3-uploader.py`) is an
-  **open decision**. The legacy ignore-list also drops `go-release-archive.tgz` but not
-  `go-release-products.tgz` (moot — both live under the excluded `internal/`).
+  `--execute` + a typed `PUBLISH` confirm; the three real mutations are the two
+  `s3-uploader.py` pushes, the capper PUT, and the two CloudFront invalidations).
+  Reuses go-site `directory_indexer.py`, `bucket-indexer.py`, and `s3-uploader.py`.
+  Pseudo-tested without any mutation: both indexer passes on a sample tree, the real
+  read-only capper over `go-data-product-release` (248 dated dirs), the push previewed
+  via `aws s3 sync --dryrun` (confirming `internal/` excluded — 9 of 11 sample files),
+  and the CloudFront IDs validated. Decisions baked in:
+  - **Content-Type = legacy.** The real push uses go-site **`s3-uploader.py`** (per
+    CLAUDE.md "don't reinvent the publish tooling"): controlled MIME map, default
+    `text/plain`, overrides `json`→application/json, `gz`→application/gzip,
+    `obo`→text/obo, `owl`→application/rdf+xml, `ttl`→text/turtle, etc. Plain `aws s3
+    sync` would guess `application/octet-stream` for `.gaf`/`.gpad`/`.gpi`/`.obo`/
+    `.owl`/`.gz` (→ download, not inline). Needs `filechunkio` installed; revisiting
+    the map is a later improvement.
+  - **Overlay-only (first-rollout requirement).** The push **never deletes** — existing
+    `go-data-product-current` objects (the OLD pipeline's files) are **preserved**, so
+    `current.geneontology.org` keeps serving prior files via CloudFront through the
+    cutover (the Track-B contract). Pruning stale objects is deferred.
+  - **`internal/` exclusion.** Neither `directory_indexer.py` nor `s3-uploader.py` has
+    an `--exclude`, so the script relocates `internal/` out of the tree during
+    `--execute` (needs the tree's parent writable, i.e. mount `/home/skyhook`);
+    otherwise it would both upload it and emit a dangling `internal/` index link.
+    **Cleaner fix planned:** add an `--exclude` flag to both go-site scripts and drop
+    the relocation.
 - **Why two indexer passes (the crux — #22).** `directory_indexer.py` bakes an
   **absolute URL prefix** into every `index.html` (`current.geneontology.org` vs
   `release.geneontology.org/$DATE`). The same on-disk tree therefore **cannot** be
