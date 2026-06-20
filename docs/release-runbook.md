@@ -195,6 +195,22 @@ stage, `Jenkinsfile` **L942–987**, which is the reference implementation:
    **E3Q4YIZHZL7358** *and* release **E2HF1DWYYDLTQP**. 🔨
 
 Details / dependencies:
+- **Implemented (hand-run) in `scripts/publish-to-s3.sh`** — the standalone Phase-5
+  orchestrator for the six steps above, **dry-run by default** (mutations only behind
+  `--execute`; the three real mutations are the two `aws s3 sync` pushes, the capper
+  PUT, and the two CloudFront invalidations). Reuses go-site `directory_indexer.py` +
+  `bucket-indexer.py`. Pseudo-tested end-to-end without any mutation: both indexer
+  passes on a sample tree, the real read-only capper over `go-data-product-release`
+  (248 dated dirs), `aws s3 sync --dryrun`, and the CloudFront IDs validated. Two
+  things baked in from that testing: **(a)** `internal/` is excluded from BOTH the
+  push (`--exclude internal/*`) AND the index — `directory_indexer` has no exclude and
+  would otherwise list `internal/` as a dangling link, so the script relocates it aside
+  during `--execute` (needs the tree's parent writable, i.e. mount `/home/skyhook`);
+  **(b)** the push uses `aws s3 sync`, which *guesses* Content-Type, whereas legacy
+  `s3-uploader.py` set a controlled MIME map (`.obo`/`.gaf`/`.ttl` → `text/plain`) —
+  preserving those Content-Types (a fix-up pass, or keeping `s3-uploader.py`) is an
+  **open decision**. The legacy ignore-list also drops `go-release-archive.tgz` but not
+  `go-release-products.tgz` (moot — both live under the excluded `internal/`).
 - **Why two indexer passes (the crux — #22).** `directory_indexer.py` bakes an
   **absolute URL prefix** into every `index.html` (`current.geneontology.org` vs
   `release.geneontology.org/$DATE`). The same on-disk tree therefore **cannot** be
