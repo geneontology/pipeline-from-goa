@@ -174,20 +174,46 @@ bless) — the one nuance to "everything on skyhook first".
 
 ## Phase 5 — Bless → Publish (make it current)
 
-Authoritative ordering (Zenodo already done in Phase 4):
+Authoritative ordering (Zenodo already done in Phase 4). This is **six
+interleaved steps**, not two copies — faithful to the old (commented) Publish
+stage, `Jenkinsfile` **L942–987**, which is the reference implementation:
 
-1. Copy tree (minus `internal/`) → **`go-data-product-release`** (dated, e.g. `/$DATE`) + build indexes. 🔨
-2. Copy tree (minus `internal/`) → **`go-data-product-current`** + build indexes. 🔨
-3. **CloudFront invalidation** — current **E3Q4YIZHZL7358**, release **E2HF1DWYYDLTQP**. 🔨
+1. **Index for release** — `directory_indexer.py … --prefix http://release.geneontology.org/$DATE -x -u`
+   over the local skyhook tree (bakes the dated-release URL into every `index.html`). 🔨
+2. **Push** the indexed tree (minus `internal/`) → **`go-data-product-release/$DATE`**. 🔨
+3. **Release-root catalog** — `bucket-indexer.py` over `go-data-product-release`
+   builds the top-level "capper" listing of all dated releases; PUT to the bucket
+   **root**, **`s3://go-data-product-release/index.html`** (distinct from the
+   per-dir indexes; must run *after* step 2 so the new dated dir is listed). 🔨
+4. **Re-index for current** — `directory_indexer.py … --prefix http://current.geneontology.org -x`
+   over the **same** tree again (now baking the `current` URL). 🔨
+5. **Push** the re-indexed tree (minus `internal/`) → **`go-data-product-current`**. 🔨
+6. **CloudFront invalidation** — **both** distributions: current
+   **E3Q4YIZHZL7358** *and* release **E2HF1DWYYDLTQP**. 🔨
 
 Details / dependencies:
-- **Index generation (#22)** runs in the pipeline over the **local** skyhook tree:
-  `directory_indexer.py` per-dir (near-instant; `-u` for the dated release tree)
-  + `bucket-indexer.py` for the release-root catalog; `internal/` is **not**
-  indexed. The slow legacy piece was the `aws-js-s3-explorer` SPA walk
-  (`s3_add_*` recursively re-indexes the *whole* bucket every release ≈ 45 min);
-  retiring it for the fast static path + a richer listing is the **optional** #23.
-  Fallback: run the finalization indexer by hand (as before) if the in-pipeline
+- **Why two indexer passes (the crux — #22).** `directory_indexer.py` bakes an
+  **absolute URL prefix** into every `index.html` (`current.geneontology.org` vs
+  `release.geneontology.org/$DATE`). The same on-disk tree therefore **cannot** be
+  pushed to both buckets as-is — it must be **re-indexed per destination**. Do
+  **not** collapse steps 1+2 and 4+5 into a single index-then-fan-out. Indexing
+  runs over the **local** skyhook tree (near-instant; `-u` updates the dated tree);
+  `internal/` is **not** indexed.
+- **Order is deliberately flipped from legacy.** The old pipeline did
+  **current → release**; the bless order here is **release(dated) → current**
+  (Zenodo-first → release → current → invalidate). Both are valid because each push
+  gets its own index pass — but the flip is a conscious choice, not an accident.
+- **Capper lands at the bucket root.** Step 3's `bucket-indexer.py` output is the
+  dated-release **catalog** at `…/release/index.html`, not a per-dir index. (Legacy
+  PUT it via `s3cmd --cf-invalidate`; here it's a plain upload + the discrete
+  step-6 invalidation.)
+- **Correctly dropped from legacy:** the `snapshot` / `go-data-product-daily/$DOW`
+  pushes (no snapshot branch now — skyhook *is* the snapshot equivalent), and the
+  `s3cmd` capper-with-inline-CF-invalidate (→ aws-cli invalidation as its own step).
+- The slow legacy piece was the `aws-js-s3-explorer` SPA walk (`s3_add_*`
+  recursively re-indexes the *whole* bucket every release ≈ 45 min); retiring it for
+  the fast static path + a richer listing is the **optional** #23.
+- Fallback: run the finalization indexer by hand (as before) if the in-pipeline
   step isn't ready for a given release.
 - Set **Cache-Control** on upload (#9).
 - **`go-public` serving pushes** (publish-stage): per-model Minerva JSON →
