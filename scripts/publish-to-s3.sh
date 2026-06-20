@@ -292,4 +292,9 @@ invalidate "$RELEASE_CF" "release"
 invalidate "$CURRENT_CF" "current"
 
 log "Done ($MODE)."
-[ "$EXECUTE" = 1 ] || log "This was a DRY RUN. Re-run with --execute (and a read-write tree) to publish for real."
+if [ "$EXECUTE" != 1 ]; then
+    log "This was a DRY RUN. Re-run with --execute (and a read-write tree) to publish for real."
+    log "NOTE: the dry-run push preview lists DATA files only -- the per-directory index.html"
+    log "      pages are written into the tree and uploaded ONLY in --execute, so the real run"
+    log "      pushes more objects than this preview shows."
+fi
