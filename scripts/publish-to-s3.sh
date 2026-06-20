@@ -47,6 +47,17 @@
 # This is a HAND-RUN operator script (the build/publish split keeps the mutating
 # tail out of the automated Jenkins build), not a Jenkins stage.
 #
+# DUAL-USE (hand-run now, Jenkins stage later -- same file, no logic change). This
+# is pure, flag-driven publish logic with no container/CI assumptions, so both:
+#   - Human: run on skyhook (or via the repo `justfile`), e.g. `--tree ... --execute`.
+#   - Jenkins (future): wrap in a stage like scripts/build-release-archives.sh --
+#     curl this script, `docker run` a deps image (aws cli + pystache/boto3/
+#     filechunkio) with the LOCAL tree BIND-mounted and the creds JSON mounted,
+#     running as the jenkins UID/GID (docker `-u`, or the su-jenkins pattern) so
+#     written index.html gets correct ownership, and call it with `--execute --yes`
+#     (--yes skips the typed-PUBLISH confirm for non-interactive). The container/
+#     ownership/dep-install setup lives in the STAGE WRAPPER, not here.
+#
 # Requirements (host-side): aws cli, python3 + pystache + boto3 + filechunkio
 # (s3-uploader.py imports filechunkio), and AWS push credentials JSON
 # ({"accessKeyId":..., "secretAccessKey":...}). The go-site tooling
