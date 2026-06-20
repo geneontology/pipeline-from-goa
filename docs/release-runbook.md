@@ -154,6 +154,12 @@ bless) — the one nuance to "everything on skyhook first".
 
 ## Phase 4 — Bless → Archive (mint the DOI first) — #19
 
+**Operator entry point:** the repo-root **`justfile`** wraps the whole hand-run
+tail (Phases 4 + 5) in bless order with safe defaults — `just --list` /
+`just bless-order` show it (`mount → zenodo-test → zenodo-mint-main →
+zenodo-mint-products → publish-dry → publish → verify → unmount`). Real mutations
+are only `zenodo-mint-*` and `publish`.
+
 *Run-level detail — API gotchas + the safe first-production-run procedure:
 **docs/zenodo-archival.md**.*
 
