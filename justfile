@@ -9,14 +9,14 @@
 # only real mutations are `zenodo-mint-*` (mints DOIs) and `publish` (which
 # prompts for a typed PUBLISH). See docs/release-runbook.md (Phases 4-5).
 #
-# Bless order (run these by hand, reviewing between steps):
-#   1. just mount                # sshfs the skyhook tree (read-write)
-#   2. just zenodo-test ...      # OPTIONAL rehearsal on the Zenodo SANDBOX
-#   3. just zenodo-mint-main     # PROD: mint archive DOI -> metadata/release-archive-doi.json
-#   4. just zenodo-mint-products # PROD: mint the secondary-products DOI
-#   5. just publish-dry          # review the full S3 + CloudFront plan (no mutations)
-#   6. just publish              # PROD: index -> push -> capper -> invalidate (typed PUBLISH)
-#   7. just verify ; just unmount
+# Bless order (run these ON skyhook, by hand, reviewing between steps).
+# (off-host only: `just mount` first to sshfs the tree; on skyhook the tree is local.)
+#   1. just zenodo-test ...      # OPTIONAL rehearsal on the SANDBOX (needs a SANDBOX concept id)
+#   2. just zenodo-mint-main     # PROD: mint archive DOI -> metadata/release-archive-doi.json
+#   3. just zenodo-mint-products # PROD: mint the secondary-products DOI
+#   4. just publish-dry          # review the full S3 + CloudFront plan (no mutations)
+#   5. just publish              # PROD: index -> push -> capper -> invalidate (typed PUBLISH)
+#   6. just verify
 
 # --- config (override on the CLI, e.g. `just tree=/mnt/skyhook/... publish-dry`) ---
 scripts          := justfile_directory() / "scripts"
@@ -29,6 +29,7 @@ products_concept := "10946933"     # Zenodo concept: "Secondary Products"
 archive          := tree / "internal/release-archives/go-release-archive.tgz"
 products         := tree / "internal/release-archives/go-release-products.tgz"
 doi_file         := tree / "metadata/release-archive-doi.json"
+products_doi_file := tree / "metadata/release-archive-products-doi.json"
 
 # list the recipes (default)
 default:
@@ -47,17 +48,17 @@ mount:
 unmount:
     fusermount -u {{tree}}
 
-# OPTIONAL rehearsal on the Zenodo SANDBOX (needs $ZENODO_SANDBOX_TOKEN); never touches production
+# OPTIONAL rehearsal on the Zenodo SANDBOX (needs $ZENODO_SANDBOX_TOKEN + a SANDBOX concept id); never touches production
 zenodo-test file concept:
-    python3 {{scripts}}/zenodo-archive-upload.py --sandbox --no-publish --concept {{concept}} --file {{file}}
+    python3 {{scripts}}/zenodo-archive-upload.py --sandbox --no-publish --concept {{concept}} --file {{file}} --version-from {{tree}}/summary.txt
 
 # PROD: mint the archive DOI and write it into the tree (needs $ZENODO_TOKEN). IRREVERSIBLE.
 zenodo-mint-main:
-    python3 {{scripts}}/zenodo-archive-upload.py --production --concept {{main_concept}} --file {{archive}} --output {{doi_file}}
+    python3 {{scripts}}/zenodo-archive-upload.py --production --concept {{main_concept}} --file {{archive}} --version-from {{tree}}/summary.txt --output {{doi_file}}
 
 # PROD: mint the secondary-products DOI (needs $ZENODO_TOKEN). IRREVERSIBLE.
 zenodo-mint-products:
-    python3 {{scripts}}/zenodo-archive-upload.py --production --concept {{products_concept}} --file {{products}}
+    python3 {{scripts}}/zenodo-archive-upload.py --production --concept {{products_concept}} --file {{products}} --version-from {{tree}}/summary.txt --output {{products_doi_file}}
 
 # review the full S3 + CloudFront publish plan -- NO mutations
 publish-dry:

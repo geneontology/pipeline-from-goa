@@ -181,12 +181,19 @@ fi
 ### Use the push creds for the aws cli too (one credential source).
 AWS_ACCESS_KEY_ID="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['accessKeyId'])" "$CREDS")"
 AWS_SECRET_ACCESS_KEY="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['secretAccessKey'])" "$CREDS")"
-export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+# The go-data-product-* buckets are us-east-1; the bare `aws s3 cp`/`aws cloudfront`
+# calls below need a region (s3-uploader.py sets its own internally, the cli does not).
+AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
+export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION
 
-### Preflight: the real push tool (s3-uploader.py) imports cleanly (only --execute).
+### Preflight tooling. pystache + boto3 + the aws CLI are needed even in DRY-RUN (the
+### indexer and the read-only capper run); filechunkio only for the real --execute push.
+python3 -c "import pystache, boto3" 2>/dev/null \
+    || die "missing python modules: need pystache + boto3 (pip install pystache boto3)"
+command -v aws >/dev/null 2>&1 || die "missing the aws CLI"
 if [ "$EXECUTE" = 1 ]; then
-    python3 -c "import boto3, filechunkio" 2>/dev/null \
-        || die "real push needs python modules boto3 + filechunkio (pip install boto3 filechunkio)"
+    python3 -c "import filechunkio" 2>/dev/null \
+        || die "real push (s3-uploader.py) needs filechunkio (pip install filechunkio)"
 fi
 
 ### Banner.
