@@ -75,35 +75,60 @@ def get_public(host, path, accept):
         return json.loads(r.read())
 
 
-def stream_put_file(host, path, token, filepath, size):
-    """Constant-memory chunked PUT of a real file. Returns (status, body, secs)."""
-    conn = http.client.HTTPSConnection(host, timeout=900)
-    conn.putrequest("PUT", path, skip_accept_encoding=True)
-    conn.putheader("Authorization", f"Bearer {token}")
-    conn.putheader("Content-Type", "application/octet-stream")
-    conn.putheader("Content-Length", str(size))
-    conn.endheaders()
-    sent = 0
-    t0 = time.time()
-    mark = 1024 ** 3
-    with open(filepath, "rb") as fh:
-        while True:
-            block = fh.read(CHUNK)
-            if not block:
-                break
-            conn.send(block)
-            sent += len(block)
-            if sent >= mark:
-                el = time.time() - t0
-                print(f"      {sent/1024**3:6.1f} GiB sent  ({sent/el/1024**2:5.0f} MiB/s)",
-                      flush=True)
-                mark += 1024 ** 3
-    if sent != size:
-        sys.exit(f"FATAL: read {sent} bytes but Content-Length was {size}")
-    resp = conn.getresponse()
-    body = resp.read()
-    conn.close()
-    return resp.status, body, time.time() - t0
+def stream_put_file(host, path, token, filepath, size, attempts=3):
+    """Constant-memory chunked PUT of a real file, with bounded retry on transient
+    failures (5xx / connection errors). A PUT replaces the whole content, so each
+    retry safely re-streams the entire file. Returns (status, body, secs)."""
+    last = None
+    for attempt in range(1, attempts + 1):
+        conn = None
+        try:
+            conn = http.client.HTTPSConnection(host, timeout=900)
+            conn.putrequest("PUT", path, skip_accept_encoding=True)
+            conn.putheader("Authorization", f"Bearer {token}")
+            conn.putheader("Content-Type", "application/octet-stream")
+            conn.putheader("Content-Length", str(size))
+            conn.endheaders()
+            sent = 0
+            t0 = time.time()
+            mark = 1024 ** 3
+            with open(filepath, "rb") as fh:
+                while True:
+                    block = fh.read(CHUNK)
+                    if not block:
+                        break
+                    conn.send(block)
+                    sent += len(block)
+                    if sent >= mark:
+                        el = time.time() - t0
+                        print(f"      {sent/1024**3:6.1f} GiB sent  ({sent/el/1024**2:5.0f} MiB/s)",
+                              flush=True)
+                        mark += 1024 ** 3
+            if sent != size:
+                sys.exit(f"FATAL: read {sent} bytes but Content-Length was {size}")
+            resp = conn.getresponse()
+            body = resp.read()
+            conn.close()
+            if resp.status >= 500 and attempt < attempts:
+                last = f"HTTP {resp.status}"
+                print(f"  upload got {resp.status} (attempt {attempt}/{attempts}); "
+                      f"re-streaming after backoff...", flush=True)
+                time.sleep(min(30, 5 * attempt))
+                continue
+            return resp.status, body, time.time() - t0
+        except (http.client.HTTPException, OSError) as e:
+            last = repr(e)
+            if conn is not None:
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+            if attempt >= attempts:
+                sys.exit(f"FATAL: upload PUT failed after {attempts} attempts: {last}")
+            print(f"  upload error (attempt {attempt}/{attempts}): {e}; "
+                  f"re-streaming after backoff...", flush=True)
+            time.sleep(min(30, 5 * attempt))
+    sys.exit(f"FATAL: upload PUT failed after {attempts} attempts: {last}")
 
 
 # --------------------------------------------------------------------------- #
