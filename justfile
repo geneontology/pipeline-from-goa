@@ -1,17 +1,20 @@
 # Publish tail (the "bless") for pipeline-from-goa -- operator recipes.
 #
-# HAND-RUN, human-gated, in order. RUN THESE ON SKYHOOK (the build/storage host ==
-# the Jenkins machine): the release tree is already on its local disk, so there is
-# no mount and no copy -- `tree` below is that local path. The build half (Jenkins)
-# has already put the tree there and staged the archive tarballs in
+# HAND-RUN, human-gated, in order, on the build/storage host (== the Jenkins machine,
+# e.g. fryer). COPY-FIRST: the bless WRITES into the tree (the mint writes the DOI
+# JSON; the index pass writes index.html), so first copy the build tree to a writable
+# work dir and point `tree` at the COPY -- never mutate the single original (worst
+# case = re-copy and retry). The build half (Jenkins) staged the archive tarballs in
 # internal/release-archives/. These recipes are SAFE BY DEFAULT: bare `just`
-# lists them; `zenodo-test` is sandbox-only; `publish-dry` mutates nothing. The
-# only real mutations are `zenodo-mint-*` (mints DOIs) and `publish` (which
+# lists them; `zenodo-test` is sandbox-only; `precheck`/`publish-dry` mutate nothing.
+# The only real mutations are `zenodo-mint-*` (mints DOIs) and `publish` (which
 # prompts for a typed PUBLISH). See docs/release-runbook.md (Phases 4-5).
 #
-# Bless order (run these ON skyhook, by hand, reviewing between steps).
-# (off-host only: `just mount` first to sshfs the tree; on skyhook the tree is local.)
-#   1. just zenodo-rehearse-main / zenodo-rehearse-products  # PROD --no-publish: upload, review draft in UI, discard (GATING)
+# Bless order, by hand, reviewing between steps. First copy + point `tree` at it:
+#   rsync -a /home/skyhook/pipeline-from-goa/main/ /home/bbop/release-work/main/
+#   then prefix every recipe:  just tree=/home/bbop/release-work/main <recipe>
+#   0. just tree=<copy> precheck # read-only pre-flight (scripts, copy, creds, Zenodo)
+#   1. just zenodo-rehearse-main / zenodo-rehearse-products  # PROD --no-publish: upload, review draft, discard (GATING)
 #   2. just zenodo-mint-main     # PROD: mint archive DOI -> metadata/release-archive-doi.json
 #   3. just zenodo-mint-products # PROD: mint the secondary-products DOI
 #   4. just publish-dry          # review the full S3 + CloudFront plan (no mutations)
@@ -38,6 +41,10 @@ default:
 # print the bless order
 bless-order:
     @sed -n '/^# Bless order/,/just verify/p' {{justfile_directory()}}/justfile | sed 's/^# \{0,1\}//'
+
+# read-only pre-flight before the bless (reviewed scripts, copy writability, push creds, Zenodo reachability)
+precheck:
+    bash {{scripts}}/bless-precheck.sh {{tree}}
 
 # OFF-HOST FALLBACK ONLY (prefer running ON skyhook). Set skyhook_host=<host> and tree=/tmp/pfg-tree first.
 mount:

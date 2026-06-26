@@ -159,15 +159,31 @@ the one nuance to "everything on skyhook first".
 ## Phase 4 — Bless → Archive (mint the DOI first) — #19
 
 **Operator entry point:** the repo-root **`justfile`** wraps the whole hand-run
-tail (Phases 4 + 5) in bless order with safe defaults — `just --list` /
-`just bless-order` show it. **Run it ON skyhook** (the build/storage host == the
-Jenkins machine): the tree is on local disk there, so there is **no mount and no
-copy** — sshfs would turn every file-touch (two index passes + two full pushes)
-into a network round-trip, and the tree is read twice. `just`'s `tree` defaults to
-`/home/skyhook/pipeline-from-goa/main`; `mount`/`unmount` are an **off-host fallback
-only**. Real mutations are only `zenodo-mint-*` and `publish`. Deps on skyhook: aws
-cli + python (pystache/boto3/filechunkio); if absent, run in a container there with
-the tree **bind-mounted** (still local — not sshfs).
+tail (Phases 4 + 5) in bless order with safe defaults — `just --list`,
+`just bless-order`, `just tree=<copy> precheck`. Run it on the build/storage host
+(== the Jenkins machine, e.g. **fryer**) so the tree is local (no sshfs); `mount`/
+`unmount` are an off-host fallback only. Real mutations are only `zenodo-mint-*`
+and `publish`.
+
+**COPY-FIRST (data safety).** The bless WRITES into the tree — the Zenodo mint writes
+`metadata/release-archive-doi.json`, the index pass writes `index.html` into every
+dir — so **never run against the single original build tree.** Copy it first and point
+`tree` at the copy (worst case = re-copy and retry):
+`rsync -a /home/skyhook/pipeline-from-goa/main/ <work>/main/`, then
+`just tree=<work>/main <recipe>`. Running as a non-`skyhook` user also means you only
+ever *read* the original.
+
+**First-run operator setup (fryer, as `bbop`, #86 / 2026-06-19):**
+- Creds: AWS push JSON at `$HOME/local/share/secrets/bbop/aws/s3/aws-go-push.json`
+  (0600, identity `go-pipeline-push-agent`); `export ZENODO_TOKEN=<production>`.
+- Tooling (boto3 + aws-cli v2 already system on fryer): `sudo apt-get install -y just`;
+  `pip3 install --user --break-system-packages pystache filechunkio` — PEP-668 host, so
+  `--user` keeps it out of the Debian-managed env (a venv is over-kill since boto3 is
+  already present).
+- `just tree=<copy> precheck` (`scripts/bless-precheck.sh`) — read-only; verifies the
+  reviewed scripts, copy writability, staged tarballs, the push identity, and that both
+  Zenodo concepts authenticate (a concept-id `302`→latest-version redirect is normal —
+  the uploader follows it).
 
 *Run-level detail — API gotchas + the safe first-production-run procedure:
 **docs/zenodo-archival.md**.*
