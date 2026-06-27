@@ -45,9 +45,10 @@ the phases below, not done-criteria.
      `go-data-product-release`, dated).
 2. **Downloads page regenerated and deployed to the main website.** This is a
    `geneontology.github.io` step (`scripts/update_downloads.py`, driven only by
-   go-site `metadata/goex.yaml`, linking to skyhook annotations), tracked at
-   **pipeline#396** — **not** a pipeline-from-goa product. Currently manual
-   ("does not yet auto-regenerate").
+   go-site `metadata/goex.yaml`, linking to **`current.geneontology.org`**
+   annotations — never skyhook), tracked at **pipeline#396** — **not** a
+   pipeline-from-goa product. Triggered per release via `just downloads-regen`
+   (see Phase 7).
 3. **Data products for external interfaces are in place, and any necessary
    service updates/restarts are done** for:
    - **amigo / golr**
@@ -415,7 +416,8 @@ Picking up the new *release* (distinct from the annotations grace mechanism):
    **keeping `go-cams/index-json/`** (defer #12) so go-fastapi needs no config
    change at cutover; revisit later.
 3. **Bless trigger (#1)** — manual vs timed; intentionally open.
-4. **Downloads page link target (#396)** — stable `current/` vs rolling skyhook.
+4. **Downloads page link target (#396)** — **resolved: `current/`.** Skyhook was
+   only a pre-release testing footing; the page always links to `current`.
 
 ## Cross-cutting tracking issues
 - #1 — assemble full pipeline / switchover timing
