@@ -45,10 +45,10 @@ the phases below, not done-criteria.
      `go-data-product-release`, dated).
 2. **Downloads page regenerated and deployed to the main website.** This is a
    `geneontology.github.io` step (`scripts/update_downloads.py`, driven only by
-   go-site `metadata/goex.yaml`, linking to **`current.geneontology.org`**
-   annotations — never skyhook), tracked at **pipeline#396** — **not** a
-   pipeline-from-goa product. Triggered per release via `just downloads-regen`
-   (see Phase 7).
+   go-site `metadata/goex.yaml`, now served **in-site** (gh.io#930), linking to
+   **`current.geneontology.org`** annotations — never skyhook), tracked at
+   **pipeline#396** — **not** a pipeline-from-goa product. Triggered per release
+   via `just downloads-regen` (see Phase 7).
 3. **Data products for external interfaces are in place, and any necessary
    service updates/restarts are done** for:
    - **amigo / golr**
@@ -202,11 +202,14 @@ ever *read* the original.
   DOI minted **first** so it can be referenced elsewhere. Validated end-to-end on
   the Zenodo **sandbox** (the real 10.70 GiB golr tarball through the actual
   script + a 12 GiB synthetic PUT, byte-exact commits); production is an explicit
-  `--production` opt-in. **GATING before the first real mint:** rehearse with
+  `--production` opt-in. **Proven flow (2026-06-19):** rehearse with
   `--production --no-publish` for **both** concepts (`just zenodo-rehearse-main` /
   `zenodo-rehearse-products`), review the unpublished drafts in the Zenodo UI, then
-  discard them — this is the only part that **cannot** be sandbox-tested (legacy-origin
-  concept metadata). Full procedure + checklist: **docs/zenodo-archival.md**. 🟡
+  **publish the reviewed drafts** with `just zenodo-publish-draft-{main,products} <id>`
+  (typed-`PUBLISH` gate) — do **not** discard a good draft and re-upload, and do **not**
+  one-shot `zenodo-mint-*` ungated. The rehearsal is the only part that **cannot** be
+  sandbox-tested (legacy-origin concept metadata). Full procedure + checklist:
+  **docs/zenodo-archival.md**. 🟡
 - Write `metadata/release-archive-doi.json` (the uploader's `--output`, shape
   `{"doi": ...}`) back into the tree (it travels *in* the published products). 🟡
 - BDBag remote-file manifest — optional, was in old Archive. 🔨(optional)
@@ -305,17 +308,18 @@ Details / dependencies:
   internally with Minerva — not the pipeline's concern.)
 
 ## Phase 7 — Downstream app releases *(external / human)*
-- Downloads page: **`just downloads-regen`** (this repo) fires the
-  `geneontology.github.io` `update-downloads.yaml` workflow, which regenerates the
-  by-organism page from go-site `metadata/goex.yaml` + `current.geneontology.org`
-  and opens a PR; review + **merge to deploy** (the merge triggers the Pages build).
-  The page is a website artifact served from `geneontology.org`, so it stays in
-  `geneontology.github.io`; the release process owns only the trigger. The old
-  stale-GAF-link bug is resolved — links now use the `annotations/gaf/`·`gpi/`
-  layout on `current` (geneontology.github.io#930). Tracked at **pipeline#396**
-  (+ geneontology.github.io#932, pipeline-from-goa#29). 👤
-- go-cam-browser "ping patrick": regenerate committed `public/data.json` →
-  `data-release-YYYY-MM-DD` branch → merge → GitHub Pages auto-deploy. 👤
+- Downloads page (`geneontology.github.io` `scripts/update_downloads.py`,
+  goex.yaml-driven). **Done for 2026-06-19 (gh.io#930):** now served **in-site** at
+  `geneontology.org/docs/download-go-annotations/downloads`, links repointed to
+  `current` `annotations/gaf/{code}-{uniprot,mod}.gaf.gz` + `gpi/` (was the skyhook/EBI
+  flat-path stale-link bug, now fixed); old `products/pages/downloads.html` → CloudFront
+  redirect (operations#86). Regenerate per release with **`just downloads-regen`** → the
+  `geneontology.github.io` `update-downloads.yaml` workflow (gh.io#932) → review + merge
+  the PR to deploy. Remaining: retire the old path (gh.io#931). 👤
+- go-cam-browser "ping patrick": refresh committed `public/data.json` from the canonical
+  product `current.geneontology.org/products/go-cam-search/go-cam-browser-search-docs.json`
+  (drop-in superset) → `data-release-YYYY-MM-DD` branch → merge → Pages. Done for
+  2026-06-19 (go-cam-browser#71); on-release automation tracked at go-cam-browser#72. 👤
 - amigo / metadata **npm** packages. 👤
 - Confirm GO API product switch. 👤
 
@@ -335,6 +339,14 @@ bless, Phases 4–5), and the breaking `/annotations/` layout goes **live to
 users** (needs a grace period). Ownership: annotations grace = **operations#83**;
 capacity = **operations#82**; date-gate + umbrella = **#1**; consumer file-path
 contracts = **#3**.
+
+> **Status — T-0 cutover executed 2026-06-19 (#19, build #86).** The first
+> new-pipeline bless published the tree to `current` + `release/2026-06-19` and
+> minted Zenodo DOIs (main `10.5281/zenodo.20943148`, products
+> `10.5281/zenodo.20941845`; see `docs/zenodo-archival.md`). The Track-B publish
+> was **additive** (overlay, no `--delete`) — `current/` now serves the old flat
+> files and the new `gaf/`·`gpi/` layout side by side, so the **Track C grace
+> period is active.** Track A gates were satisfied in practice by this run.
 
 ### Track A — Readiness gates (must be green before T‑0)
 - **Publish/bless tail built — the critical path** (Phases 4–5; operations#83
@@ -404,7 +416,10 @@ Picking up the new *release* (distinct from the annotations grace mechanism):
 - golr/AmiGO deploy from `current/products/solr` + the DOI → operations#82 T+24h
   verify. 🔧
 - GO API **restart** (re-fetches `index-json`); repoint only if #12 lands. 🔧
-- go-stats auto-fires on `current/metadata/release-date.json` change (SNS). 🟡
+- go-stats: **no separate step** — `release_stats/` is generated in-pipeline
+  (Phase 2) and published with the tree; `stats.html` reads it dynamically (the
+  `release_date` flows through `go-stats-summary.json`). Supersedes the old
+  SNS-triggered post-publish go-stats. ✅
 - go-cam-browser regenerate + commit `public/data.json` ("ping patrick"). 👤
 - Downloads page regenerate / switch to new layout (#396). 👤
 - amigo / metadata **npm** packages. 👤
@@ -416,8 +431,9 @@ Picking up the new *release* (distinct from the annotations grace mechanism):
    **keeping `go-cams/index-json/`** (defer #12) so go-fastapi needs no config
    change at cutover; revisit later.
 3. **Bless trigger (#1)** — manual vs timed; intentionally open.
-4. **Downloads page link target (#396)** — **resolved: `current/`.** Skyhook was
-   only a pre-release testing footing; the page always links to `current`.
+4. **Downloads page link target (#396)** — **resolved 2026-06-19: `current`**
+   (canonical post-release; page moved in-site, gh.io#930). Skyhook was only a
+   pre-release testing footing.
 
 ## Cross-cutting tracking issues
 - #1 — assemble full pipeline / switchover timing

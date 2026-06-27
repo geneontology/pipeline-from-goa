@@ -54,8 +54,19 @@ curl -s   http://current.geneontology.org/products/solr/golr_timestamp.log      
 curl -s   http://current.geneontology.org/metadata/release-archive-doi.json        # expect doi 10.5281/zenodo.20943148
 ```
 
-## Out of scope for this hand-off (separate / human)
+## Downstream consumer updates (track these — not "out of scope")
 
-- go-cam-browser data release (regenerate + commit `public/data.json` — "ping Patrick")
-- amigo / metadata npm publishes
-- downloads page (`geneontology.github.io`, driven from the pipeline session — see #396)
+The golr/amigo/api deploy above is the operations-owned core, but the release is
+not done until the downstream consumer surfaces reflect it too. These live in
+other repos / with other people, but they belong on the release board (see
+`release-runbook.md` "Definition of done") — listed here so the operations
+session sees the whole board, not just golr/amigo/api.
+
+| Surface | Action this release | Owner | Tracking |
+| --- | --- | --- | --- |
+| **go-stats / `stats.html`** | **None.** `release_stats/` (the go-stats output, e.g. `go-stats-summary.json` carrying the `release_date`, and `aggregated-go-stats-summaries.json`) is generated **in the pipeline** (Phase 2) and published with the tree; `geneontology.org/stats.html` fetches `release_stats/` dynamically. Supersedes the old SNS-triggered post-publish go-stats step — no separate action. | pipeline | — |
+| **Downloads page** | Regenerate / repoint the by-organism annotation downloads to `current`; now served **in-site** at `geneontology.org/docs/download-go-annotations/downloads/` (links use the new `annotations/gaf/`·`gpi/` layout). | `geneontology.github.io` | #396, gh.io#930 |
+| **Downloads old-URL forward** | CloudFront **Function** 301 `/products/pages/downloads.html` → the in-site page. Associate **after** gh.io#930 deploys, else it 301s to a 404. | **operations** | operations#86 |
+| **go-cam-browser data** | Regenerate + commit `public/data.json` (`data-release-YYYY-MM-DD` branch → merge → Pages auto-deploy). "ping Patrick". | `go-cam-browser` | per-release |
+| **npm packages** | `amigo` / metadata / `dbxrefs` — **only if their content changed** this release; not automatic per data release. | software | conditional |
+| **Release notes / announcement** | Only when there is a change or error. | human | — |
