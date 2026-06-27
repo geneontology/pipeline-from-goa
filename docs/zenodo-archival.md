@@ -132,4 +132,8 @@ Only **discard** a draft you are *not* going to publish (a pure throwaway test):
   in the Jenkinsfile.
 - **First production bless — DONE (2026-06-19).** main archive DOI
   `10.5281/zenodo.20943148`, secondary products `10.5281/zenodo.20941845`; published
-  via the rehearse → review → publish-draft flow.
+  via the rehearse → review → publish-draft flow. The main archive is ~1.3 GiB — an
+  order of magnitude below the old pipeline's ~16 GiB; the drop is the discontinued
+  all-UniProt mega-GAF (`filtered_goa_uniprot_all.gaf.gz`, ~10 GiB) + `annotations/archive/`
+  (~9 GiB), see `parity-and-products.md` — **not** missing content (ontology + all 171
+  species' annotations are intact).

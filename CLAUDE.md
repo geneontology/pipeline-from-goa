@@ -35,11 +35,17 @@ Facts that shape the work (so they aren't relearned):
   / CloudFront `E3Q4YIZHZL7358`; release = `go-data-product-release` /
   `E2HF1DWYYDLTQP`. (Canonical bucket↔distribution table lives in
   `geneontology/operations` `CLAUDE.md`.)
-- **Deploys read from `current`, not skyhook.** The `operations` ansible
+- **`current` is the canonical source of truth post-release — for *all*
+  public links and downstream consumers, not just deploys.** Point
+  consumers at `current.geneontology.org`, never the rolling skyhook build
+  or EBI upstream (the downloads-page links and the go-cam-browser
+  `public/data.json` were repointed to `current` for exactly this reason,
+  2026-06-19). Deploys are the canonical case: the `operations` ansible
   (`update-golr.yaml`, `amigo-golr-up-production.yml`) pulls input over
   HTTP from `current.geneontology.org/products/...`, so publishing to
   `go-data-product-current` is what unblocks golr/amigo deploy. Those
-  steps stay in `operations`, not this pipeline (but track them).
+  steps stay in `operations`, not this pipeline (but track them). (This is
+  the consumer-side complement to the input-side Data-provenance rule below.)
 - **Out of scope / legacy:** `rdf.geneontology.org` / production
   Blazegraph journal / graphstore rebuild are being decommissioned — no
   outward-facing concern. Do **not** add Blazegraph product generation.
@@ -51,9 +57,13 @@ Facts that shape the work (so they aren't relearned):
   (`directory_indexer.py`, `s3-uploader.py`, `bucket-indexer.py`,
   `zenodo-version-update.py`) — don't reinvent it. The **downloads page is
   not ours**: it is generated in `geneontology.github.io`
-  (`scripts/update_downloads.py`, driven only by go-site `metadata/goex.yaml`),
-  tracked at pipeline#396 — do not add a downloads-page generator here. (The
-  go-site `downloads-page-gen.py` is superseded.)
+  (`scripts/update_downloads.py`, driven only by go-site `metadata/goex.yaml`)
+  — do not add a downloads-page generator here (the go-site
+  `downloads-page-gen.py` is superseded). As of gh.io#930 it is served
+  **in-site** at `geneontology.org/docs/download-go-annotations/downloads`
+  (links to `current`); the old
+  `current.geneontology.org/products/pages/downloads.html` becomes a
+  CloudFront-Function redirect (operations#86). Follow-ups: #396, gh.io#931.
 
 ## Data provenance
 
