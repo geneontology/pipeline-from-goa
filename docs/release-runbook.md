@@ -45,9 +45,10 @@ the phases below, not done-criteria.
      `go-data-product-release`, dated).
 2. **Downloads page regenerated and deployed to the main website.** This is a
    `geneontology.github.io` step (`scripts/update_downloads.py`, driven only by
-   go-site `metadata/goex.yaml`, now served in-site linking to `current`
-   annotations — gh.io#930), tracked at **pipeline#396** — **not** a pipeline-from-goa product. Currently manual
-   ("does not yet auto-regenerate").
+   go-site `metadata/goex.yaml`, now served **in-site** (gh.io#930), linking to
+   **`current.geneontology.org`** annotations — never skyhook), tracked at
+   **pipeline#396** — **not** a pipeline-from-goa product. Triggered per release
+   via `just downloads-regen` (see Phase 7).
 3. **Data products for external interfaces are in place, and any necessary
    service updates/restarts are done** for:
    - **amigo / golr**
@@ -312,7 +313,9 @@ Details / dependencies:
   `geneontology.org/docs/download-go-annotations/downloads`, links repointed to
   `current` `annotations/gaf/{code}-{uniprot,mod}.gaf.gz` + `gpi/` (was the skyhook/EBI
   flat-path stale-link bug, now fixed); old `products/pages/downloads.html` → CloudFront
-  redirect (operations#86). Remaining: build-wiring + retire old path (gh.io#931). 👤
+  redirect (operations#86). Regenerate per release with **`just downloads-regen`** → the
+  `geneontology.github.io` `update-downloads.yaml` workflow (gh.io#932) → review + merge
+  the PR to deploy. Remaining: retire the old path (gh.io#931). 👤
 - go-cam-browser "ping patrick": refresh committed `public/data.json` from the canonical
   product `current.geneontology.org/products/go-cam-search/go-cam-browser-search-docs.json`
   (drop-in superset) → `data-release-YYYY-MM-DD` branch → merge → Pages. Done for
@@ -429,7 +432,8 @@ Picking up the new *release* (distinct from the annotations grace mechanism):
    change at cutover; revisit later.
 3. **Bless trigger (#1)** — manual vs timed; intentionally open.
 4. **Downloads page link target (#396)** — **resolved 2026-06-19: `current`**
-   (canonical post-release; page moved in-site, gh.io#930).
+   (canonical post-release; page moved in-site, gh.io#930). Skyhook was only a
+   pre-release testing footing.
 
 ## Cross-cutting tracking issues
 - #1 — assemble full pipeline / switchover timing

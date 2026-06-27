@@ -102,3 +102,11 @@ verify:
     @echo "current index:"  ; curl -sS -o /dev/null -w "  %{http_code}  %{url_effective}\n" https://current.geneontology.org/index.html
     @echo "release catalog:"; curl -sS -o /dev/null -w "  %{http_code}  %{url_effective}\n" https://release.geneontology.org/index.html
     @echo "DOI file in tree:"; test -f {{doi_file}} && cat {{doi_file}} || echo "  (not written yet)"
+
+# Phase 7 (downstream): regenerate the public downloads page for this release (#396).
+# Fires the geneontology.github.io workflow, which regenerates the page from go-site
+# goex.yaml + current.geneontology.org and opens a PR -- review + merge it to deploy.
+# Needs `gh` (run from anywhere; no tree access required). Optional reason for the PR.
+downloads-regen reason='manual':
+    gh workflow run update-downloads.yaml --repo geneontology/geneontology.github.io -f reason="{{reason}}"
+    @echo "Triggered. Review + merge the PR to deploy: https://github.com/geneontology/geneontology.github.io/pulls"
