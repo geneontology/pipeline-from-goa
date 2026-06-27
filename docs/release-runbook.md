@@ -45,9 +45,10 @@ the phases below, not done-criteria.
      `go-data-product-release`, dated).
 2. **Downloads page regenerated and deployed to the main website.** This is a
    `geneontology.github.io` step (`scripts/update_downloads.py`, driven only by
-   go-site `metadata/goex.yaml`, linking to skyhook annotations), tracked at
-   **pipeline#396** — **not** a pipeline-from-goa product. Currently manual
-   ("does not yet auto-regenerate").
+   go-site `metadata/goex.yaml`, linking to **`current.geneontology.org`**
+   annotations — never skyhook), tracked at **pipeline#396** — **not** a
+   pipeline-from-goa product. Triggered per release via `just downloads-regen`
+   (see Phase 7).
 3. **Data products for external interfaces are in place, and any necessary
    service updates/restarts are done** for:
    - **amigo / golr**
@@ -304,13 +305,15 @@ Details / dependencies:
   internally with Minerva — not the pipeline's concern.)
 
 ## Phase 7 — Downstream app releases *(external / human)*
-- Downloads page: regenerate `downloads.html` in `geneontology.github.io` via
-  `scripts/update_downloads.py` (reads go-site `metadata/goex.yaml`, links to
-  skyhook annotations) → deploy via the website. Tracked at **pipeline#396**;
-  currently manual. **Stale-link bug:** the script's GAF links predate the #15
-  annotations restructure (`annotations/{code}.gaf.gz` /`{code}-uniprot.gaf.gz`)
-  and must move to `annotations/gaf/{code}-mod.gaf.gz` (~23 MOD orgs only) and
-  `annotations/gaf/{code}-uniprot.gaf.gz`; GPI currently links to EBI, not skyhook. 👤
+- Downloads page: **`just downloads-regen`** (this repo) fires the
+  `geneontology.github.io` `update-downloads.yaml` workflow, which regenerates the
+  by-organism page from go-site `metadata/goex.yaml` + `current.geneontology.org`
+  and opens a PR; review + **merge to deploy** (the merge triggers the Pages build).
+  The page is a website artifact served from `geneontology.org`, so it stays in
+  `geneontology.github.io`; the release process owns only the trigger. The old
+  stale-GAF-link bug is resolved — links now use the `annotations/gaf/`·`gpi/`
+  layout on `current` (geneontology.github.io#930). Tracked at **pipeline#396**
+  (+ geneontology.github.io#932, pipeline-from-goa#29). 👤
 - go-cam-browser "ping patrick": regenerate committed `public/data.json` →
   `data-release-YYYY-MM-DD` branch → merge → GitHub Pages auto-deploy. 👤
 - amigo / metadata **npm** packages. 👤
@@ -413,7 +416,8 @@ Picking up the new *release* (distinct from the annotations grace mechanism):
    **keeping `go-cams/index-json/`** (defer #12) so go-fastapi needs no config
    change at cutover; revisit later.
 3. **Bless trigger (#1)** — manual vs timed; intentionally open.
-4. **Downloads page link target (#396)** — stable `current/` vs rolling skyhook.
+4. **Downloads page link target (#396)** — **resolved: `current/`.** Skyhook was
+   only a pre-release testing footing; the page always links to `current`.
 
 ## Cross-cutting tracking issues
 - #1 — assemble full pipeline / switchover timing
