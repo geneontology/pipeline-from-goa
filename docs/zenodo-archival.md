@@ -59,16 +59,28 @@ and verify:
 - [ ] The **file** is attached, right name, right **size** (the script already
       size-verifies on commit; confirm visually too).
 
-Then **discard each draft** (it is unpublished, so deletable): "Delete"/"Discard" in
-the Zenodo UI, or `DELETE /api/records/<id>/draft` (204). Do **not** leave rehearsal
-drafts behind. (A *published* record cannot be deleted — see Gotchas — which is
-exactly why the rehearsal uses `--no-publish`.)
+When both drafts look right, **publish the reviewed drafts directly** — do **not**
+discard a good draft and re-upload (it wastes a multi-GB transfer, and the draft you
+reviewed is exactly what should be published):
 
-When both drafts look right, the REAL mint is `just zenodo-mint-main` +
-`just zenodo-mint-products` (production; publishes; writes the version DOI into
-`metadata/release-archive-doi.json` / `release-archive-products-doi.json` via
-`--output`). **Publishing mints the DOI and is irreversible** — a published record
-cannot be deleted.
+    just tree=<copy> zenodo-publish-draft-main     <main-draft-id>
+    just tree=<copy> zenodo-publish-draft-products <products-draft-id>
+
+Each wraps `scripts/zenodo-publish-draft.sh`, which re-checks the draft has a
+committed file, **prompts for a typed `PUBLISH`** (irreversible — a published record
+cannot be deleted), publishes via `POST /api/records/<id>/draft/actions/publish`, then
+reads the top-level `doi` and writes it into the tree
+(`metadata/release-archive-doi.json` / `release-archive-products-doi.json`).
+
+Only **discard** a draft you are *not* going to publish (a pure throwaway test):
+"Delete"/"Discard" in the UI, or `DELETE /api/records/<id>/draft` (204).
+
+> One-shot alternative — the `zenodo-mint-*` recipes upload **and** publish in one
+> call. Prefer the rehearse → review → publish-draft flow above: it puts a human review
+> gate on the *actual uploaded draft*. If you one-shot anyway, run it **gated** via
+> `scripts/zenodo-mint.sh zenodo-mint-main <doi-file> <copy-tree>` (typed `PUBLISH`) —
+> never the raw recipe directly (no confirmation; that is how an unreviewed publish
+> slipped out the first time).
 
 ## Validated (sandbox, 2026-06-05)
 
@@ -113,6 +125,11 @@ cannot be deleted.
   `internal/release-archives/{go-release-archive,go-release-products}.tgz`.
 - **Uploader — DONE + sandbox-validated**; the production path is **rehearsed via
   `--no-publish`** (above) before the first real mint.
-- **Operator entry point** — the repo-root `justfile` (`zenodo-rehearse-*`,
-  `zenodo-mint-*`); a future automated bless stage is scaffolded (disabled) in the
-  Jenkinsfile.
+- **Operator entry point** — the repo-root `justfile`: the proven flow is
+  `zenodo-rehearse-*` → (review) → `zenodo-publish-draft-*` (gated
+  `scripts/zenodo-publish-draft.sh`); `zenodo-mint-*` one-shot only via gated
+  `scripts/zenodo-mint.sh`. A future automated bless stage is scaffolded (disabled)
+  in the Jenkinsfile.
+- **First production bless — DONE (2026-06-19).** main archive DOI
+  `10.5281/zenodo.20943148`, secondary products `10.5281/zenodo.20941845`; published
+  via the rehearse → review → publish-draft flow.

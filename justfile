@@ -14,12 +14,14 @@
 #   rsync -a /home/skyhook/pipeline-from-goa/main/ /home/bbop/release-work/main/
 #   then prefix every recipe:  just tree=/home/bbop/release-work/main <recipe>
 #   0. just tree=<copy> precheck # read-only pre-flight (scripts, copy, creds, Zenodo)
-#   1. just zenodo-rehearse-main / zenodo-rehearse-products  # PROD --no-publish: upload, review draft, discard (GATING)
-#   2. just zenodo-mint-main     # PROD: mint archive DOI -> metadata/release-archive-doi.json
-#   3. just zenodo-mint-products # PROD: mint the secondary-products DOI
+#   1. just zenodo-rehearse-main / zenodo-rehearse-products  # PROD: upload -> unpublished DRAFT per concept
+#   2. review BOTH drafts in the Zenodo UI (title/creators/version/file+size); see docs/zenodo-archival.md
+#   3. just zenodo-publish-draft-main <id> / zenodo-publish-draft-products <id>  # publish the REVIEWED drafts (typed PUBLISH); writes the DOIs
 #   4. just publish-dry          # review the full S3 + CloudFront plan (no mutations)
 #   5. just publish              # PROD: index -> push -> capper -> invalidate (typed PUBLISH)
 #   6. just verify
+# Publish the reviewed draft -- do NOT discard a good draft and re-upload. The one-shot
+# zenodo-mint-* recipes upload+publish together; run them ONLY via gated scripts/zenodo-mint.sh.
 
 # --- config (override on the CLI, e.g. `just tree=/mnt/skyhook/... publish-dry`) ---
 scripts          := justfile_directory() / "scripts"
@@ -70,11 +72,20 @@ zenodo-rehearse-main:
 zenodo-rehearse-products:
     python3 {{scripts}}/zenodo-archive-upload.py --production --no-publish --concept {{products_concept}} --file {{products}} --version-from {{tree}}/summary.txt
 
-# PROD: mint the archive DOI and write it into the tree (needs $ZENODO_TOKEN). IRREVERSIBLE.
+# PROD: publish a REVIEWED main draft (id from zenodo-rehearse-main) + write its DOI. Gated (typed PUBLISH).
+zenodo-publish-draft-main id:
+    bash {{scripts}}/zenodo-publish-draft.sh {{id}} {{doi_file}}
+
+# PROD: publish a REVIEWED products draft (id from zenodo-rehearse-products) + write its DOI. Gated.
+zenodo-publish-draft-products id:
+    bash {{scripts}}/zenodo-publish-draft.sh {{id}} {{products_doi_file}}
+
+# PROD one-shot (upload+publish in one go). PREFER rehearse -> review -> publish-draft above.
+# Run ONLY via the gated wrapper:  scripts/zenodo-mint.sh zenodo-mint-main {{doi_file}} {{tree}}
 zenodo-mint-main:
     python3 {{scripts}}/zenodo-archive-upload.py --production --concept {{main_concept}} --file {{archive}} --version-from {{tree}}/summary.txt --output {{doi_file}}
 
-# PROD: mint the secondary-products DOI (needs $ZENODO_TOKEN). IRREVERSIBLE.
+# PROD one-shot. Gated wrapper:  scripts/zenodo-mint.sh zenodo-mint-products {{products_doi_file}} {{tree}}
 zenodo-mint-products:
     python3 {{scripts}}/zenodo-archive-upload.py --production --concept {{products_concept}} --file {{products}} --version-from {{tree}}/summary.txt --output {{products_doi_file}}
 
