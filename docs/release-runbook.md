@@ -413,7 +413,10 @@ Picking up the new *release* (distinct from the annotations grace mechanism):
 - golr/AmiGO deploy from `current/products/solr` + the DOI → operations#82 T+24h
   verify. 🔧
 - GO API **restart** (re-fetches `index-json`); repoint only if #12 lands. 🔧
-- go-stats auto-fires on `current/metadata/release-date.json` change (SNS). 🟡
+- go-stats: **no separate step** — `release_stats/` is generated in-pipeline
+  (Phase 2) and published with the tree; `stats.html` reads it dynamically (the
+  `release_date` flows through `go-stats-summary.json`). Supersedes the old
+  SNS-triggered post-publish go-stats. ✅
 - go-cam-browser regenerate + commit `public/data.json` ("ping patrick"). 👤
 - Downloads page regenerate / switch to new layout (#396). 👤
 - amigo / metadata **npm** packages. 👤
