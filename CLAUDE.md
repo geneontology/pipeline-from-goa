@@ -316,6 +316,23 @@ The correct workflow:
 5. This is a fresh build -- it runs from the first stage, including
    the long indexer
 
+**Triggering the scan without the UI (API, verified 2026-07-06).**
+"Scan Repository Now" is a POST to the multibranch project root with a
+CSRF crumb; the `~/.netrc` token authenticates:
+
+    BASE=https://build.geneontology.io
+    crumb=$(curl -n -sS "$BASE/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")
+    curl -n -sS -X POST -H "$crumb" "$BASE/job/pipeline-from-goa/build?delay=0"   # 302 = success
+
+The re-index detects the new head and auto-schedules the branch build.
+**Guard first:** there is no `disableConcurrentBuilds` (see "Run
+cleanup"), so scanning mid-run lets `initialize()`'s `rm -rf` clobber
+the in-flight tree -- confirm `.../job/main/lastBuild/api/json?tree=building`
+shows `"building":false` before you POST. Then verify the scan took by
+re-reading `.../job/main/lastBuild` for a new `number` that is `building`
+on the expected `lastBuiltRevision.SHA1`. Gotcha: `?tree=foo[bar]` needs
+`curl -g` (`--globoff`) or the shell treats `[...]` as a glob range.
+
 **Be extra careful when editing the Jenkinsfile.** A typo costs
 hours of pipeline time. Before pushing a Jenkinsfile change:
 - Read the diff carefully
