@@ -44,6 +44,13 @@ default:
 bless-order:
     @sed -n '/^# Bless order/,/just verify/p' {{justfile_directory()}}/justfile | sed 's/^# \{0,1\}//'
 
+# print the defining-assumptions audit prompt (human-triggered; spawn a fresh independent agent with it, then triage)
+audit:
+    @echo "# Run an INDEPENDENT Claude agent (fresh, no stake in recent changes) against a clean checkout"
+    @echo "# with the prompt below; then triage its PASS/VIOLATION report. Full spec: docs/assumptions-audit.md"
+    @echo ""
+    @sed -n '/^> You are an INDEPENDENT/,/Do NOT edit files\./p' {{justfile_directory()}}/docs/assumptions-audit.md | sed 's/^> \{0,1\}//'
+
 # read-only pre-flight before the bless (reviewed scripts, copy writability, push creds, Zenodo reachability)
 precheck:
     bash {{scripts}}/bless-precheck.sh {{tree}}

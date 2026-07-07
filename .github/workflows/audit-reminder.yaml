@@ -1,0 +1,47 @@
+name: Assumptions-audit reminder
+
+# Periodic nudge to run the human-triggered "defining-assumptions audit"
+# (docs/assumptions-audit.md). This does NOT run the audit — the audit is
+# semi-manual (`just audit` prints the prompt; a person spawns a fresh
+# independent agent and triages the report). This workflow only opens a
+# reminder issue if one isn't already open, so the nudge lands on the board.
+
+on:
+  schedule:
+    - cron: '0 9 1 * *'   # 09:00 UTC on the 1st of each month
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open a reminder issue if none is open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          open=$(gh issue list --repo "$REPO" --state open --json title \
+                  --jq '[.[] | select(.title | test("defining-assumptions audit"))] | length')
+          if [ "$open" -gt 0 ]; then
+            echo "An open audit reminder already exists; nothing to do."
+            exit 0
+          fi
+          body=$(cat <<'BODY'
+          [bot] Automated reminder from `.github/workflows/audit-reminder.yaml`.
+
+          Time to run the **defining-assumptions audit** — a human-triggered, independent-agent sweep of the whole data path (input provenance, one-ontology-per-run, docker/reproducibility, bless invariants). Run:
+
+              just audit    # prints the agent prompt; spawn a fresh independent Claude with it
+
+          Spec, Exception Registry, and cadence: `docs/assumptions-audit.md`. Triage the PASS/VIOLATION report, file/fix findings, then close this issue.
+          BODY
+          )
+          # strip the leading indentation the heredoc carries from the YAML block
+          body=$(printf '%s\n' "$body" | sed 's/^          //')
+          gh issue create --repo "$REPO" \
+            --title "[bot] Run the defining-assumptions audit (periodic reminder)" \
+            --body "$body"
