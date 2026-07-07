@@ -87,10 +87,14 @@ lands on the board via `.github/workflows/audit-reminder.yaml` (monthly; it only
 ## Open findings (last run: 2026-07-06)
 
 - **Provenance — #30.** snapshot ontology reads: validation/minerva/golr `go-amigo.owl`
-  + go-reports `-c go.obo` repointed to skyhook (in working tree); **PANTHER**
-  `GOLR_INPUT_PANTHER_TREES` still on snapshot and needs a **stage reorder** (build
-  PANTHER trees before Produce-derivatives) + repoint (skyhook or go-public per
-  owltools#171).
+  + go-reports `-c go.obo` repointed to skyhook — **committed (718d64e), on main;** the
+  next full build (Scan Repository Now) picks it up. Watch at build time: `go-amigo.owl`
+  is read by OWLTools, and while it is plain (non-gzip) `.owl` and should be fine over
+  skyhook-HTTPS, verify it doesn't hit owltools#171; if it does, push it to go-public S3
+  and point plain-HTTP (mirror `GOLR_INPUT_GAFS`). **PANTHER** `GOLR_INPUT_PANTHER_TREES`
+  still on snapshot (documented inline in the Jenkinsfile): it needs a **stage reorder**
+  (build PANTHER trees before Produce-derivatives) + a go-public push (gzip → owltools#171)
+  — the remaining #30 sub-item, not the #32154 cause.
 - **Reproducibility / docker — #31.** floating `ubuntu:noble` (7 stages), unpinned
   in-container toolchain, noctua-models at `master`, NCBITaxon OBO download, two dead
   env vars.
