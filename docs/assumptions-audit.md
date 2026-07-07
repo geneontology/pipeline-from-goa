@@ -62,7 +62,7 @@ enforced.
 |---|---|---|---|
 | 1 | reacto-NEO ontojournal from legacy `skyhook.berkeleybop.org` | `internal-all-gocam-products.sh` | accepted interim (roadmap: port NEO in-pipeline) |
 | 2 | prior-release stats/ontology/refs from `current` for go-stats **diffing** (`-s -n -p -r` + aggregated summaries) | `produce-derivatives.sh` | accepted (decision pending) |
-| 3 | union GAFs re-hosted on go-public S3 (plain http) | `Jenkinsfile` `GOLR_INPUT_GAFS` | accepted — OWLTools can't read skyhook-HTTPS gzip (owltools#171 / #2) |
+| 3 | union GAFs + PANTHER `arbre.tgz` re-hosted on go-public S3 (plain http) | `Jenkinsfile` `GOLR_INPUT_GAFS`, `GOLR_INPUT_PANTHER_TREES` | accepted — OWLTools can't read skyhook-HTTPS gzip (owltools#171 / #2); both are gzip |
 | 4 | NCBITaxon auto-download from OBO Foundry | `gocam-processing.sh` | soft — documented, foreign (non-GO); track toward a pinned source |
 | 5 | `master`/`main` git grabs (go-site, go-stats, minerva, gocam-py, noctua-models) | `Jenkinsfile` `TARGET_*_BRANCH` | soft — allowed by provenance rule 3, but pin the resolved SHA (esp. noctua-models) |
 
@@ -86,15 +86,14 @@ lands on the board via `.github/workflows/audit-reminder.yaml` (monthly; it only
 
 ## Open findings (last run: 2026-07-06)
 
-- **Provenance — #30.** snapshot ontology reads: validation/minerva/golr `go-amigo.owl`
-  + go-reports `-c go.obo` repointed to skyhook — **committed (718d64e), on main;** the
-  next full build (Scan Repository Now) picks it up. Watch at build time: `go-amigo.owl`
-  is read by OWLTools, and while it is plain (non-gzip) `.owl` and should be fine over
-  skyhook-HTTPS, verify it doesn't hit owltools#171; if it does, push it to go-public S3
-  and point plain-HTTP (mirror `GOLR_INPUT_GAFS`). **PANTHER** `GOLR_INPUT_PANTHER_TREES`
-  still on snapshot (documented inline in the Jenkinsfile): it needs a **stage reorder**
-  (build PANTHER trees before Produce-derivatives) + a go-public push (gzip → owltools#171)
-  — the remaining #30 sub-item, not the #32154 cause.
+- **Provenance — #30 (fully repointed; awaiting the build).** Every golr/minerva/validation
+  ontology read + go-reports `-c` + PANTHER now sources from this run, not `snapshot` —
+  committed on main (718d64e ontology, 7991f1b PANTHER). PANTHER was the last piece: its
+  stage was moved ahead of the golr consumer and `arbre.tgz` is now pushed to go-public
+  (Exception 3). The next full build (Scan Repository Now) picks it all up. Watch at build
+  time: `go-amigo.owl` is read by OWLTools — plain (non-gzip) `.owl`, should be fine over
+  skyhook-HTTPS, but if it hits owltools#171, push it to go-public and point plain-HTTP
+  (mirror `GOLR_INPUT_GAFS`).
 - **Reproducibility / docker — #31.** floating `ubuntu:noble` (7 stages), unpinned
   in-container toolchain, noctua-models at `master`, NCBITaxon OBO download, two dead
   env vars.

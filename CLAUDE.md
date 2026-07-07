@@ -326,8 +326,13 @@ hours of pipeline time. Before pushing a Jenkinsfile change:
 - You cannot pre-validate the syntax: the declarative-linter endpoint
   (`build.geneontology.io/pipeline-model-converter/validate`) is blocked by
   Cloudflare's WAF (the `docker run`/`sh` body trips it, returns the "you have
-  been blocked" page). So mirror a known-good stage exactly, sanity-check `{`/`}`
-  balance, and treat the next Scan/build as the real syntax check.
+  been blocked" page). This is **auth-independent** — tested 2026-07-06: an
+  authenticated POST (valid API token + CSRF crumb) still 403s on the body (a
+  bodyless `whoAmI` 200s fine), and the Jenkins CLI `declarative-linter` (both
+  HTTP and `-webSocket`) fails the edge handshake (400, `/cli` not proxied). So
+  there is genuinely no pre-build syntax check: mirror a known-good stage
+  exactly, sanity-check `{`/`}` balance, and treat the next Scan/build as the
+  real syntax check.
 - To scaffold a stage you don't want to run yet, **comment it out** (`/* ... */`
   or `//`) — zero parse-risk — rather than gating it live with
   `when { expression { return false } }`: you can't lint the gated version, and a
