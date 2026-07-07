@@ -125,7 +125,7 @@ echo "Check that results have been stored properly"
 su jenkins -c 'curl "http://localhost:8080/solr/select?q=*:*&rows=0"'
 echo "End of results"
 
-run_retry "python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c http://snapshot.geneontology.org/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d ${START_DATE}"
+run_retry "python3 /tmp/go_reports.py -g http://localhost:8080/solr/ -s http://current.geneontology.org/release_stats/go-stats.json -n http://current.geneontology.org/release_stats/go-stats-no-pb.json -c https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/go.obo -p http://current.geneontology.org/ontology/go.obo -r http://current.geneontology.org/release_stats/go-references.tsv -o /tmp/stats/ -d ${START_DATE}"
 run_retry "cd /workspace/go-stats && wget -N http://current.geneontology.org/release_stats/aggregated-go-stats-summaries.json"
 
 # Roll the stats forward.

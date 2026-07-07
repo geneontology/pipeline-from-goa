@@ -103,17 +103,17 @@ pipeline {
 	///
 	/// Ontobio Validation
 	///
-	// WARNING: This will need to be changed.
-	VALIDATION_ONTOLOGY_URL="http://snapshot.geneontology.org/ontology/go.json"
+	// This run's own GOEx-acquired ontology on skyhook, NOT snapshot (#30).
+	VALIDATION_ONTOLOGY_URL="https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/go.json"
 
 	///
 	/// Minerva input.
 	///
 
 	// Minerva operating profile.
-	// WARNING: This will need to be changed.
+	// This run's own GOEx-acquired ontology on skyhook, NOT snapshot (#30).
 	MINERVA_INPUT_ONTOLOGIES = [
-	    "http://snapshot.geneontology.org/ontology/extensions/go-lego.owl"
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/extensions/go-lego.owl"
 	].join(" ")
 
 	///
@@ -123,8 +123,12 @@ pipeline {
 	// GOlr load profile.
 	GOLR_SOLR_MEMORY = "256G"
 	GOLR_LOADER_MEMORY = "256G"
+	// This run's own GOEx-acquired ontology on skyhook, NOT snapshot (#30).
+	// VERIFY before building: OWLTools must be able to read this skyhook-HTTPS .owl.
+	// If it hits owltools#171 (as the union GAFs did), push go-amigo.owl to go-public
+	// S3 and point here instead (mirror GOLR_INPUT_GAFS).
 	GOLR_INPUT_ONTOLOGIES = [
-	    "http://snapshot.geneontology.org/ontology/extensions/go-amigo.owl"
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/extensions/go-amigo.owl"
 	].join(" ")
 	// WARNING: hard-coded for the moment.
 	// These union GAFs are served from S3 (go-public) over plain HTTP, NOT from
@@ -155,6 +159,14 @@ pipeline {
 	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_9.gaf.gz',
 	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_10.gaf.gz'
 	].join(" ")
+	// STILL ON SNAPSHOT -- remaining #30 sub-item (a provenance violation, but
+	// NOT the go-ontology#32154 cause). This run produces its own arbre.tgz in
+	// the 'PANTHER trees' stage, but that stage currently runs AFTER 'Produce
+	// derivatives' (the golr consumer), so a naive skyhook repoint would feed
+	// golr a not-yet-produced file. Correct fix = (a) move 'PANTHER trees' ahead
+	// of 'Produce derivatives', and (b) because arbre.tgz is gzip it will hit
+	// owltools#171 over skyhook-HTTPS just like the union GAFs, so push it to
+	// go-public S3 and point here plain-HTTP (mirror GOLR_INPUT_GAFS above).
 	GOLR_INPUT_PANTHER_TREES = [
 	    "http://snapshot.geneontology.org/products/panther/arbre.tgz"
 	].join(" ")
