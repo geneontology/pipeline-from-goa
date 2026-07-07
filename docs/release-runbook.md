@@ -104,6 +104,10 @@ the phases below, not done-criteria.
 ## Phase 3 — Pre-release QC / readiness
 - Consolidated run-error surface (the "grep exception" readiness signal). 🔨🟡
 - Files-in-expected-locations / parity check (#3). 🟡
+- **Defining-assumptions audit** — run `just audit` (an independent agent over the whole
+  data path: input provenance, one-ontology-per-run, docker pinning, reproducibility,
+  bless invariants); triage its report before blessing. No un-audited release. Spec +
+  Exception Registry: **docs/assumptions-audit.md**. 🔨(operator)
 - Human approval / wait gate — deferred for now, add later. 🔨(later)
 
 > **Build-then-publish; `internal/` is the staging area.** The pipeline has two

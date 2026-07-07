@@ -81,15 +81,26 @@ endpoints — `current.geneontology.org`, `snapshot.geneontology.org`,
 on their own cadences/procedures that need not line up with this release run, so
 depending on them makes the release non-reproducible.
 
+This rule is documentation, not enforcement — and a doc-only rule drifts. It is now
+checked by a periodic **defining-assumptions audit** (an independent agent reasoning
+over the whole data path: provenance, one-ontology-per-run, docker pinning,
+reproducibility, bless invariants) — **`docs/assumptions-audit.md`**, run via
+`just audit` before a bless. That audit exists because the golr / Minerva / validation
+/ go-reports ontology inputs and the PANTHER trees were read from `snapshot` for
+~18 months — a real bug that reached production AmiGO (go-ontology#32154) despite being
+tracked (pipeline#394, closed on the acquisition half only) and rule-documented right
+here. Repoint to our own run's output is **#30**; the reproducibility class (floating
+`ubuntu:noble` base, unpinned toolchain, …) is **#31**.
+
 **GO-CAM data specifically:** lock all in-house GO-CAM data in place with a
 **single grab of `geneontology/noctua-models`** at run start (pin the ref), and
 derive everything from that one snapshot — the Minerva JSON dump
 (`products/json/noctua-models-json.tgz`), the true-GO-CAM products, the
 `go-cams/index-json/` API indexes (go-fastapi), and the GO-CAM Browser search
-docs. Known violations to repoint now: `gocam-processing.sh` reads the Minerva tarball
-+ `go.obo`/`groups.yaml` from `current`; `internal-all-gocam-products.sh` reads
-`ttl/` from `go-data-product-live-go-cam` (both → the noctua-models grab /
-in-pipeline ontology + run-time go-site metadata).
+docs. (The GO-CAM violations once tracked here — `gocam-processing.sh` reading from
+`current`, `internal-all-gocam-products.sh` reading `ttl/` from
+`go-data-product-live-go-cam` — are **RESOLVED**, audit-confirmed now reading from the
+noctua-models grab / this run's own skyhook ontology + run-time go-site metadata.)
 
 **Known, ACCEPTED interim exception — the reacto-neo ontojournal / NEO.** The
 Minerva JSON dump (`minerva-cli --dump-owl-json`) needs a reacto-**neo**
