@@ -159,16 +159,13 @@ pipeline {
 	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_9.gaf.gz',
 	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_10.gaf.gz'
 	].join(" ")
-	// STILL ON SNAPSHOT -- remaining #30 sub-item (a provenance violation, but
-	// NOT the go-ontology#32154 cause). This run produces its own arbre.tgz in
-	// the 'PANTHER trees' stage, but that stage currently runs AFTER 'Produce
-	// derivatives' (the golr consumer), so a naive skyhook repoint would feed
-	// golr a not-yet-produced file. Correct fix = (a) move 'PANTHER trees' ahead
-	// of 'Produce derivatives', and (b) because arbre.tgz is gzip it will hit
-	// owltools#171 over skyhook-HTTPS just like the union GAFs, so push it to
-	// go-public S3 and point here plain-HTTP (mirror GOLR_INPUT_GAFS above).
+	// This run's own PANTHER arbre.tgz, produced by the 'PANTHER trees' stage
+	// (moved ahead of this consumer) and pushed to go-public S3. Served plain-
+	// HTTP, not skyhook-HTTPS, because arbre.tgz is gzip and OWLTools cannot read
+	// skyhook-HTTPS gzip (owltools#171 / #2) -- same treatment as the union GAFs
+	// above. #30.
 	GOLR_INPUT_PANTHER_TREES = [
-	    "http://snapshot.geneontology.org/products/panther/arbre.tgz"
+	    "http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/arbre.tgz"
 	].join(" ")
 
 	///
@@ -410,6 +407,49 @@ pipeline {
 	//     }
 	// }
 
+	stage('PANTHER trees') {
+	    steps {
+		script {
+		    dir('./go-site') {
+			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
+
+			// Download PANTHER tree files and names.
+			sh "wget -N http://data.pantherdb.org/PANTHER${PANTHER_VERSION}/globals/tree_files.tar.gz"
+			sh "wget -N http://data.pantherdb.org/PANTHER${PANTHER_VERSION}/globals/names.tab"
+			sh 'tar -zxvf tree_files.tar.gz'
+
+			// Generate arbre files from PANTHER data.
+			sh 'python3 ./scripts/prepare-panther-arbre-directory.py -v --names names.tab --trees tree_files --output arbre'
+			sh 'tar --use-compress-program=pigz -cvf arbre.tgz -C arbre .'
+		    }
+
+		    // Copy to skyhook.
+		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
+			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./go-site/arbre.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/panther/'
+		    }
+
+		    // Also publish arbre.tgz to go-public S3 over plain HTTP for the
+		    // golr consumer: arbre.tgz is gzip and OWLTools cannot read
+		    // skyhook-HTTPS gzip (owltools#171 / #2), exactly like the union
+		    // GAFs -- so GOLR_INPUT_PANTHER_TREES reads it from go-public
+		    // plain-HTTP. Container + s3cmd, mirroring the union-GAF push in
+		    // annotation-download-and-partition.sh (the host has no s3cmd). #30.
+		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/publish-arbre-go-public.sh -o ./scripts/publish-arbre-go-public.sh"
+		    withCredentials([file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON')]) {
+			sh """
+			    docker run --rm \\
+			      --init \\
+			      -u root:root \\
+			      -v "\$WORKSPACE":/workspace \\
+			      -v "\$S3CMD_JSON":/secrets/s3cmd.cfg:ro \\
+			      ubuntu:noble \\
+			      bash /workspace/scripts/publish-arbre-go-public.sh
+			"""
+		    }
+		}
+	    }
+	}
+
 	//...
 	stage('Produce derivatives (*)') {
 
@@ -627,30 +667,6 @@ pipeline {
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
 			sh 'rsync -avz --exclude=".git" -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" ./go-site-for-metadata/metadata/ skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/metadata/'
 			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY README-annotation-downloads.txt skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/annotations/README.txt'
-		    }
-		}
-	    }
-	}
-
-	stage('PANTHER trees') {
-	    steps {
-		script {
-		    dir('./go-site') {
-			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
-
-			// Download PANTHER tree files and names.
-			sh "wget -N http://data.pantherdb.org/PANTHER${PANTHER_VERSION}/globals/tree_files.tar.gz"
-			sh "wget -N http://data.pantherdb.org/PANTHER${PANTHER_VERSION}/globals/names.tab"
-			sh 'tar -zxvf tree_files.tar.gz'
-
-			// Generate arbre files from PANTHER data.
-			sh 'python3 ./scripts/prepare-panther-arbre-directory.py -v --names names.tab --trees tree_files --output arbre'
-			sh 'tar --use-compress-program=pigz -cvf arbre.tgz -C arbre .'
-		    }
-
-		    // Copy to skyhook.
-		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE')]) {
-			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./go-site/arbre.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/panther/'
 		    }
 		}
 	    }
