@@ -320,10 +320,17 @@ Details / dependencies:
   redirect (operations#86). Regenerate per release with **`just downloads-regen`** → the
   `geneontology.github.io` `update-downloads.yaml` workflow (gh.io#932) → review + merge
   the PR to deploy. Remaining: retire the old path (gh.io#931). 👤
-- go-cam-browser "ping patrick": refresh committed `public/data.json` from the canonical
-  product `current.geneontology.org/products/go-cam-search/go-cam-browser-search-docs.json`
-  (drop-in superset) → `data-release-YYYY-MM-DD` branch → merge → Pages. Done for
-  2026-06-19 (go-cam-browser#71); on-release automation tracked at go-cam-browser#72. 👤
+- go-cam-browser: since **go-cam-browser#74** (2026-07) the app **fetches** the
+  search-docs product at runtime — the old committed `public/data.json` and its in-repo
+  generator are **gone**. The per-release step is now: **bump the dated release URL in
+  `.env.production`** to
+  `https://release.geneontology.org/<YYYY-MM-DD>/products/go-cam-search/go-cam-browser-search-docs.json`
+  → merge to `main` → Pages auto-deploys. The `deploy.yaml` `check:search-docs` step
+  validates that URL against the app's Zod schema and **blocks the deploy** on a 404 or a
+  shape change (fix the app first; the live site stays on the prior release meanwhile).
+  `.env` (local dev) tracks `current.geneontology.org`. The 2026-06-19 release used the
+  old `public/data.json` path (go-cam-browser#71, now retired); on-release automation of
+  the bump is still tracked at go-cam-browser#72. 👤
 - amigo / metadata **npm** packages. 👤
 - Confirm GO API product switch. 👤
 
@@ -424,7 +431,9 @@ Picking up the new *release* (distinct from the annotations grace mechanism):
   (Phase 2) and published with the tree; `stats.html` reads it dynamically (the
   `release_date` flows through `go-stats-summary.json`). Supersedes the old
   SNS-triggered post-publish go-stats. ✅
-- go-cam-browser regenerate + commit `public/data.json` ("ping patrick"). 👤
+- go-cam-browser: bump the dated `release.geneontology.org/<YYYY-MM-DD>/…` URL in
+  `.env.production` → merge to `main` (go-cam-browser#74; **not** `public/data.json`
+  anymore). 👤
 - Downloads page regenerate / switch to new layout (#396). 👤
 - amigo / metadata **npm** packages. 👤
 
