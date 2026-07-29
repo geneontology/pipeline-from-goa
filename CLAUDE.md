@@ -92,6 +92,28 @@ tracked (pipeline#394, closed on the acquisition half only) and rule-documented 
 here. Repoint to our own run's output is **#30**; the reproducibility class (floating
 `ubuntu:noble` base, unpinned toolchain, …) is **#31**.
 
+**Mouse is not an independent GOA upstream — source (1) loops back through us.**
+GOEx `MOUSE-mod.gaf.gz` contains GO's own output: the `gopreprocess`
+ortholog-inference job (branch `p2go-homology-upstream-file-generator` of
+`geneontology/pipeline`, weekly Thursday cron on `wok`) publishes
+`https://mirror.geneontology.io/mgi-p2go-homology.gaf.gz`, EBI GOA ingests it,
+and a filtered subset comes back to us inside `MOUSE-mod.gaf.gz` — which
+`go-site` `metadata/datasets/mgi.yaml` reads as the MGI upstream. That round
+trip is **~22.5% of the production MGI GAF** (159,525 annotations, 14,649 mouse
+genes, 2026-05-21 release). Verified 2026-07-28: every GO_Central annotation
+under `GO_REF:0000119` / `GO_REF:0000096` in GOEx is present in our mirror file
+(159,130 tuples, zero GOA-only), all dated on the job's Thursday cron days.
+
+This does **not** violate the rule above — we read GOEx, which is source (1),
+and the loop closes outside our pipeline. But treat "GOA upstream" as *not
+independent* for mouse when reasoning about provenance, reproducibility, or a
+mouse-annotation regression: a drop originating in `gopreprocess` arrives here
+as a perfectly valid, quietly smaller GOEx file, with no error and no reference
+to GO anywhere in the metadata. The commented-out mirror URL at
+`mgi.yaml:29` is the only breadcrumb, and it reads as dead. See
+gopreprocess#78 for the live instance of exactly that failure mode (an Alliance
+format change that would silently zero the ortholog map).
+
 **GO-CAM data specifically:** lock all in-house GO-CAM data in place with a
 **single grab of `geneontology/noctua-models`** at run start (pin the ref), and
 derive everything from that one snapshot — the Minerva JSON dump
