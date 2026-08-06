@@ -19,7 +19,8 @@
 #   3. just zenodo-publish-draft-main <id> / zenodo-publish-draft-products <id>  # publish the REVIEWED drafts (typed PUBLISH); writes the DOIs
 #   4. just publish-dry          # review the full S3 + CloudFront plan (no mutations)
 #   5. just publish              # PROD: index -> push -> capper -> invalidate (typed PUBLISH)
-#   6. just verify
+#   6. just publish-gocam-dry / just publish-gocam  # PROD: GO API model JSON -> go-public (typed PUBLISH)
+#   7. just verify
 # Publish the reviewed draft -- do NOT discard a good draft and re-upload. The one-shot
 # zenodo-mint-* recipes upload+publish together; run them ONLY via gated scripts/zenodo-mint.sh.
 
@@ -103,6 +104,14 @@ publish-dry:
 # PROD: run the real publish (index -> push -> capper -> invalidate); prompts for a typed PUBLISH
 publish:
     bash {{scripts}}/publish-to-s3.sh --tree {{tree}} --creds {{creds}} --execute
+
+# review the go-public GO-CAM JSON push plan -- NO mutations (slow: previews ~54k objects)
+publish-gocam-dry:
+    bash {{scripts}}/publish-gocam-json-go-public.sh --tree {{tree}} --creds {{creds}}
+
+# PROD: push the per-model Minerva JSON serving surface the GO API reads (#24); typed PUBLISH
+publish-gocam:
+    bash {{scripts}}/publish-gocam-json-go-public.sh --tree {{tree}} --creds {{creds}} --execute
 
 # quick post-publish sanity over HTTP (current + release indexes + DOI file in tree)
 verify:

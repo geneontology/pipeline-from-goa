@@ -27,6 +27,8 @@ MAIN_CONCEPT=1205166
 PRODUCTS_CONCEPT=10946933
 ARCH="$TREE/internal/release-archives/go-release-archive.tgz"
 PRODF="$TREE/internal/release-archives/go-release-products.tgz"
+GOCAMJ="$TREE/internal/gocam-json-per-model"
+GOCAMJ_MIN=40000
 
 FAILED=0
 pass(){ printf '  \033[32m\xe2\x9c\x93\033[0m %s\n' "$1"; }
@@ -56,6 +58,18 @@ if [ -f "$REPO/scripts/publish-to-s3.sh" ]; then
     fi
 else
     warn "checkout not found at $REPO -- skipping script-version check"
+fi
+# The go-public push is only correct WITH the ACL: that bucket has no policy, so
+# public readability is per-object. Without it go-fastapi reads 403 and reports
+# "model not found" -- a silent break. Refuse a stale copy that lacks it.
+if [ -f "$REPO/scripts/publish-gocam-json-go-public.sh" ]; then
+    if grep -q -- '--acl public-read' "$REPO/scripts/publish-gocam-json-go-public.sh"; then
+        pass "publish-gocam-json-go-public.sh has --acl public-read (reviewed version)"
+    else
+        fail "publish-gocam-json-go-public.sh missing --acl public-read (stale checkout)"
+    fi
+else
+    warn "publish-gocam-json-go-public.sh not in checkout -- GO API model JSON will not be published (#24)"
 fi
 
 echo "=== B. copy integrity / writability ==="
@@ -88,6 +102,16 @@ if [ -f "$TREE/metadata/release-archive-doi.json" ]; then
     warn "DOI file already present (stale? the mint overwrites it)"
 else
     pass "DOI file absent (expected pre-mint)"
+fi
+# Per-model Minerva JSON staged for the go-public serving push (#24). The dump is
+# ~54k files; a much smaller count means a truncated build, and publishing it
+# would overlay a live serving surface.
+if [ -d "$GOCAMJ" ]; then
+    gc=$(find "$GOCAMJ" -maxdepth 1 -name '*.json' -type f 2>/dev/null | wc -l)
+    if [ "$gc" -ge "$GOCAMJ_MIN" ]; then pass "gocam-json-per-model/ ($gc *.json)"
+    else fail "gocam-json-per-model/ has only $gc *.json (expected >= $GOCAMJ_MIN) -- truncated?"; fi
+else
+    fail "gocam-json-per-model/ missing: $GOCAMJ (build half did not stage it; GO API would go stale)"
 fi
 
 echo "=== D. tooling ==="

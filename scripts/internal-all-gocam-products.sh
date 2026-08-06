@@ -10,6 +10,9 @@
 #   products/json/noctua-models-json.tgz   (Minerva JSON dump; issue #17)
 #       -- the canonical in-pipeline Minerva JSON, consumed downstream by
 #          the GO-CAM processing stage (which must run AFTER this one).
+#   internal/gocam-json-per-model/         (the SAME Minerva dump, untarred:
+#                                           the per-model SERVING form the GO
+#                                           API reads; issue #24)
 #   internal/all-true-go-cams-json/        (gocam-py JSON, "true" GO-CAMs)
 #   internal/all-true-go-cams-yaml/        (gocam-py YAML, same set)
 #   internal/all-go-cams-gpad/             (unified + per-model GPADs, all
@@ -198,6 +201,15 @@ SKYHOOK_BASE="${SKYHOOK_MAIN}/internal"
 # The canonical Minerva JSON product (issue #17) -- consumed by the
 # downstream GO-CAM processing stage.
 rsync_retry "$WORK/noctua-models-json.tgz" "${SKYHOOK_MAIN}/products/json/"
+
+# The same dump, untarred, staged for the publish half to push to
+# s3://go-public/files/go-cam/ (issue #24). The tarball above is the ARCHIVAL
+# form; go-fastapi fetches individual {stripped_id}.json objects, which is the
+# SERVING form -- so both ship. Staged under internal/ (never served from
+# current/release, never archived) because publish, not the release tree, is
+# its destination. --dump-owl-json already emits flat <id>.json, which is
+# exactly the key layout go-fastapi builds its URL from.
+rsync_retry "$WORK/jsonout/"          "${SKYHOOK_BASE}/gocam-json-per-model/"
 
 rsync_retry "$WORK/gocam-json/"       "${SKYHOOK_BASE}/all-true-go-cams-json/"
 rsync_retry "$WORK/gocam-yaml/"       "${SKYHOOK_BASE}/all-true-go-cams-yaml/"
