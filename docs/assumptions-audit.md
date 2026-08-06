@@ -36,6 +36,18 @@ auto-edit.
    Nothing from our serving sites (`snapshot`/`current.geneontology.org`,
    `go-data-product-*`, `skyhook.berkeleybop.org`, `experimental.geneontology.io`)
    except the Exception Registry below.
+   **The rule is temporal, not spatial** — the hostname is a proxy for the real
+   hazard, which is *the run under construction consuming a **different**
+   release*. `current` is dangerous **before** this run publishes to it precisely
+   because it still holds the **previous** release; blending two releases is what
+   makes a run non-reproducible. (Registry entry 2 is labelled *prior-release* for
+   exactly this reason.) It follows that a read of `current` **after** this run has
+   published to it — in the publish half, which "computes no *new* release data" —
+   is a round-trip through this run's *own* output and **is not a violation**;
+   likewise the one-off remediation pattern of repairing a release from the blessed
+   `current` after the fact. Judge by *which release the bytes belong to*, not by
+   the hostname. (Still prefer reading the staged tree where you can: fewer moving
+   parts, no ordering dependency on the push having propagated.)
 2. **One ontology per run.** The GOEx-acquired ontology (→ skyhook `ontology/`) is the
    single copy every consumer (golr, minerva, validation, go-stats) uses.
 3. **Own-output hops.** Each stage reads *this run's* skyhook tree — **respecting

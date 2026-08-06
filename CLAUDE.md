@@ -81,6 +81,12 @@ endpoints — `current.geneontology.org`, `snapshot.geneontology.org`,
 on their own cadences/procedures that need not line up with this release run, so
 depending on them makes the release non-reproducible.
 
+Note the rationale there is **temporal**: the hazard is *this* run consuming a
+**different** release, and pre-publish `current` is the previous one. So the ban
+is on *inputs to data production*; the publish half reading back what this same
+run just published is not the same act. Spelled out in `docs/assumptions-audit.md`
+assumption 1, so the audit does not false-positive on it.
+
 This rule is documentation, not enforcement — and a doc-only rule drifts. It is now
 checked by a periodic **defining-assumptions audit** (an independent agent reasoning
 over the whole data path: provenance, one-ontology-per-run, docker pinning,

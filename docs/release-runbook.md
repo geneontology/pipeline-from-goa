@@ -152,7 +152,8 @@ granularity is chosen for Restart-from-Stage recovery.
      just don't re-run the mint unless you mean to.
   2. Copy tree (minus `internal/`) → release bucket (dated) + indexes.
   3. Copy tree (minus `internal/`) → current bucket + indexes.
-  4. `go-public` pushes (per-model Minerva JSON #24; union GAFs).
+  4. `go-public` pushes — per-model Minerva JSON via `just publish-gocam`
+     (#24, `publish-gocam-json-go-public.sh`); union GAFs.
   5. CloudFront invalidation (current + release).
 
 Stages 2–5 are **idempotent** (S3 sync, index regen, CloudFront) — safe to restart
@@ -237,6 +238,21 @@ stage, `Jenkinsfile` **L942–987**, which is the reference implementation:
 6. **CloudFront invalidation** — **both** distributions: current
    **E3Q4YIZHZL7358** *and* release **E2HF1DWYYDLTQP**. 🔨
 
+**Plus a seventh step, in its own script — the GO API serving surface (#24).**
+`just publish-gocam-dry` / `just publish-gocam` →
+`scripts/publish-gocam-json-go-public.sh`, which syncs
+`internal/gocam-json-per-model/` → **`s3://go-public/files/go-cam/`** with
+`--acl public-read`. It is kept out of the six above because it targets a
+different bucket with different semantics, not the release tree — but it is
+**not optional**: `go-fastapi` reads individual `{id}.json` objects from that
+prefix and has no other source, so skipping it freezes every GO-CAM rendered by
+AmiGO, the Alliance and the MOD pathway widgets (all of which go through
+`wc-gocam-viz` → `api.geneontology.org/api/go-cam/`). Two things bite here:
+the **ACL is load-bearing** (that bucket has no policy, so an upload without
+`--acl public-read` is private, and go-fastapi reports the resulting 403 as
+"model not found" — a silent break); and the push is **overlay-only**, like the
+release pushes. Independent of steps 1–6, so its position among them is free.
+
 Details / dependencies:
 - **Implemented (hand-run) in `scripts/publish-to-s3.sh`** — the standalone Phase-5
   orchestrator for the six steps above, **dry-run by default** (mutations only behind
@@ -289,8 +305,10 @@ Details / dependencies:
   step isn't ready for a given release.
 - Set **Cache-Control** on upload (#9).
 - **`go-public` serving pushes** (publish-stage): per-model Minerva JSON →
-  `go-public/files/go-cam/` for the GO API (#24); union GAFs → `go-public/skyhook-geneontology-io/`
-  for OWLTools (currently pushed at build — align to publish later).
+  `go-public/files/go-cam/` for the GO API — **done (#24)**, `just publish-gocam` →
+  `publish-gocam-json-go-public.sh`, sourced from `internal/gocam-json-per-model/`;
+  union GAFs → `go-public/skyhook-geneontology-io/` for OWLTools (currently pushed at
+  build — align to publish later).
 - Pinned GO-CAM path renames to land at/with cutover: `go-cams/index-json/` #12 🧊
   (plus the GO-CAM layout refresh — see #3). (#11 `release_stats/` rename was
   dropped; keeping `release_stats/`.)

@@ -60,13 +60,31 @@ skyhook only because of the new `internal/` tree (61,099 files).
 | `annotation-download-and-partition.sh` | `annotations/{gaf,gpad,gpi}/MNEMONIC-{mod,uniprot}.<ext>.gz`; `internal/union-gaf-partitions/union_*.gaf.gz` (10); (+ S3 `go-public/skyhook-geneontology-io/union_*`) |
 | `produce-derivatives.sh` | `products/solr/golr-index-contents.tgz` + `golr_timestamp.log`; `release_stats/*` (go-stats) |
 | `gocam-processing.sh` | `go-cams/json/*`; `products/indexed-go-cams/*`; `go-cams/index-json/*` (6); `products/go-cam-search/go-cam-browser-search-docs.json`; `reports/go-cam/*` |
-| `internal-all-gocam-products.sh` | `internal/all-true-go-cams-json/*`; `internal/all-true-go-cams-yaml/*`; `internal/all-go-cams-gpad/unified.gpad.gz` + `model/*` |
+| `internal-all-gocam-products.sh` | `products/json/noctua-models-json.tgz`; `internal/gocam-json-per-model/*` (#24); `internal/all-true-go-cams-json/*`; `internal/all-true-go-cams-yaml/*`; `internal/all-go-cams-gpad/unified.gpad.gz` + `model/*` |
 | QC reports download | `reports/go-rules-by-group/*_gorule_report.*`; `reports/tests-go-rules/gorules_test_errors.*`; `reports/*` (rest) |
 | Metadata + README | `metadata/**` (rsync of `go-site/metadata/`); `annotations/README.txt` |
 | PANTHER trees | `products/panther/arbre.tgz` |
 
 Note: `initialize()` also `mkdir`s `products/json/`; it **is** populated by
 `internal-all-gocam-products.sh` (#17 — resolved, see Gaps).
+
+### Serving surfaces (publish-half destinations, not skyhook outputs)
+
+The table above is the *skyhook release tree*. Some products also have a
+**serving** destination outside it, pushed by the publish half — and because
+those live in no directory listing, they are exactly the class of product a
+parity sweep of the tree will miss. They are enumerated here for that reason.
+
+| serving surface | source | pushed by | consumer |
+|---|---|---|---|
+| `s3://go-public/files/go-cam/{id}.json` | `internal/gocam-json-per-model/` | `publish-gocam-json-go-public.sh` (`just publish-gocam`, #24) | GO API (`go-fastapi`) → AmiGO / Alliance / MOD widgets via `wc-gocam-viz` |
+| `s3://go-public/skyhook-geneontology-io/union_*.gaf.gz` | `internal/union-gaf-partitions/` | `annotation-download-and-partition.sh` (at build; audit Exception 3) | GOlr indexer (OWLTools) |
+| `s3://go-public/skyhook-geneontology-io/arbre.tgz` | `products/panther/arbre.tgz` | `publish-arbre-go-public.sh` (at build; audit Exception 3) | GOlr indexer (OWLTools) |
+
+All three require **`--acl public-read`**: `go-public` has no bucket policy and
+no Public Access Block, so public readability is per-object. An upload without
+it is private, and consumers see a 403 — which `go-fastapi` reports as "model
+not found", i.e. a silent failure.
 
 ## Delta, classified
 
