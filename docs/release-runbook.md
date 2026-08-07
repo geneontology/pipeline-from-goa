@@ -89,7 +89,9 @@ the phases below, not done-criteria.
 - PANTHER `arbre.tgz`. ✅
 
 ## Phase 2 — Derive products
-- Solr index `golr-index-contents.tgz` + timestamp + release-only Solr sanity gate. ✅
+- Solr index `golr-index-contents.tgz` + timestamp + Solr count-floor sanity
+  gate (on `main`; floors = prior release's counts rounded down, re-ratcheted
+  per release — total/bioentity/annotation). ✅
 - `release_stats/` via go-stats. ✅
 - GO-CAM processing (json, index-json, search-docs, reports). ✅
 - `internal/` all-GO-CAM products. ✅

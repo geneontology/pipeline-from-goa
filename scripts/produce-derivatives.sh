@@ -60,8 +60,12 @@ bash /tmp/run-indexer-no-opt.sh
 chown -R jenkins:jenkins /workspace
 chmod -R a+r /srv/solr/data
 
-# Sanity check on release branch only.
-if [[ "${BRANCH_NAME:-}" == "release" ]]; then
+# Sanity floors on main (the release-producing branch): fail the stage if
+# the just-built index is smaller than the floors. A valid-but-quietly-
+# smaller index is the failure shape to catch (see the mouse GOA loop in
+# CLAUDE.md); floors are the prior release's counts rounded down --
+# re-ratchet them each release (values set in the Jenkinsfile).
+if [[ "${BRANCH_NAME:-}" == "main" ]]; then
     echo "SANITY_SOLR_DOC_COUNT_MIN: $SANITY_SOLR_DOC_COUNT_MIN"
     docs=$(curl -s 'http://localhost:8080/solr/select?q=*:*&rows=0&wt=json' | grep -oh '"numFound":[[:digit:]]*' | grep -oh '[[:digit:]]*')
     if [[ "$SANITY_SOLR_DOC_COUNT_MIN" -gt "$docs" ]]; then
@@ -77,6 +81,14 @@ if [[ "${BRANCH_NAME:-}" == "release" ]]; then
         exit 1
     fi
     echo "Bioentity count OK: $bio"
+
+    echo "SANITY_SOLR_ANNOTATION_DOC_COUNT_MIN: $SANITY_SOLR_ANNOTATION_DOC_COUNT_MIN"
+    ann=$(curl -s 'http://localhost:8080/solr/select?q=*:*&rows=0&wt=json&fq=document_category:annotation' | grep -oh '"numFound":[[:digit:]]*' | grep -oh '[[:digit:]]*')
+    if [[ "$SANITY_SOLR_ANNOTATION_DOC_COUNT_MIN" -gt "$ann" ]]; then
+        echo "Annotation count $ann below minimum $SANITY_SOLR_ANNOTATION_DOC_COUNT_MIN"
+        exit 1
+    fi
+    echo "Annotation count OK: $ann"
 fi
 
 # Tar up the Solr index.

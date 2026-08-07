@@ -57,12 +57,16 @@ pipeline {
 	// very exotic cases where these check may need to be skipped
 	// for a run, in that case this variable is set to 'FALSE'.
 	WE_ARE_BEING_SAFE_P = 'TRUE'
-	// Sanity check for solr index being built--overall min count.
+	// Sanity check for solr index being built--min doc-count floors.
 	// See https://github.com/geneontology/pipeline/issues/315 .
-	// Only used on release attempts (as it saves QC time and
-	// getting the number for all branches would be a trick).
-	SANITY_SOLR_DOC_COUNT_MIN = 11000000
-	SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN = 1400000
+	// Runs on main (the only branch in this release model). Floors are
+	// the current production counts rounded down (measured 2026-08-07:
+	// total 18,957,071 / bioentity 1,750,636 / annotation 14,736,040);
+	// re-ratchet them each release. A valid-but-quietly-smaller index
+	// is a real failure shape here (see the mouse GOA loop in CLAUDE.md).
+	SANITY_SOLR_DOC_COUNT_MIN = 18000000
+	SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN = 1700000
+	SANITY_SOLR_ANNOTATION_DOC_COUNT_MIN = 14000000
 	// Control make to get through our loads faster if
 	// possible. Assuming we're cpu bound for some of these...
 	// wok has 48 "processors" over 12 "cores", so I have no idea;
@@ -491,6 +495,7 @@ pipeline {
 			      -e BRANCH_NAME="\$BRANCH_NAME" \\
 			      -e SANITY_SOLR_DOC_COUNT_MIN="\$SANITY_SOLR_DOC_COUNT_MIN" \\
 			      -e SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN="\$SANITY_SOLR_BIOENTITY_DOC_COUNT_MIN" \\
+			      -e SANITY_SOLR_ANNOTATION_DOC_COUNT_MIN="\$SANITY_SOLR_ANNOTATION_DOC_COUNT_MIN" \\
 			      -e GOLR_INPUT_ONTOLOGIES="\$GOLR_INPUT_ONTOLOGIES" \\
 			      -e GOLR_INPUT_GAFS="\$GOLR_INPUT_GAFS" \\
 			      -e GOLR_INPUT_PANTHER_TREES="\$GOLR_INPUT_PANTHER_TREES" \\
