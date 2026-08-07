@@ -77,6 +77,7 @@ enforced.
 | 3 | union GAFs + PANTHER `arbre.tgz` re-hosted on go-public S3 (plain http) | `Jenkinsfile` `GOLR_INPUT_GAFS`, `GOLR_INPUT_PANTHER_TREES` | accepted — OWLTools can't read skyhook-HTTPS gzip (owltools#171 / #2); both are gzip |
 | 4 | NCBITaxon auto-download from OBO Foundry | `gocam-processing.sh` | soft — documented, foreign (non-GO); track toward a pinned source |
 | 5 | `master`/`main` git grabs (go-site, go-stats, minerva, gocam-py, noctua-models) | `Jenkinsfile` `TARGET_*_BRANCH` | soft — allowed by provenance rule 3, but pin the resolved SHA (esp. noctua-models) |
+| 6 | PANTHER upstream fetch (`tree_files.tar.gz` + `names.tab`) from `data.pantherdb.org`, version-locked via `PANTHER_VERSION` | `Jenkinsfile` PANTHER stage | accepted (audit triage 2026-08-07) — foreign (non-GO), version-pinned URL; like entry 4, track toward a mirrored/pinned source |
 
 ## Agent prompt
 
