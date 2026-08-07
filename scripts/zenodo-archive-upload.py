@@ -94,7 +94,7 @@ def stream_put_file(host, path, token, filepath, size, attempts=3):
             conn.putheader("Authorization", f"Bearer {token}")
             conn.putheader("Content-Type", "application/octet-stream")
             conn.putheader("Content-Length", str(size))
-            conn.putheader("User-Agent", "pipeline-from-goa-zenodo-uploader/1.0")
+            conn.putheader("User-Agent", "geneontology/1.0 (+https://geneontology.org)")
             conn.endheaders()
             sent = 0
             t0 = time.time()
