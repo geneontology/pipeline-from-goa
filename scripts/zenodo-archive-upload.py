@@ -76,9 +76,15 @@ def get_public(host, path, accept):
 
 
 def stream_put_file(host, path, token, filepath, size, attempts=3):
-    """Constant-memory chunked PUT of a real file, with bounded retry on transient
-    failures (5xx / connection errors). A PUT replaces the whole content, so each
-    retry safely re-streams the entire file. Returns (status, body, secs)."""
+    """Constant-memory streaming PUT (Content-Length) of a real file, with bounded
+    retry on transient failures (5xx / connection errors). A PUT replaces the whole
+    content, so each retry safely re-streams the entire file. Returns
+    (status, body, secs).
+
+    The User-Agent header below is LOAD-BEARING: as of 2026-08-07 Zenodo's edge
+    kills UA-less large uploads mid-stream (~344 MiB in, SSL EOF, no error body)
+    while the identical PUT with a UA completes. http.client sets no UA by
+    default, so removing it silently re-breaks multi-GB uploads."""
     last = None
     for attempt in range(1, attempts + 1):
         conn = None
@@ -88,6 +94,7 @@ def stream_put_file(host, path, token, filepath, size, attempts=3):
             conn.putheader("Authorization", f"Bearer {token}")
             conn.putheader("Content-Type", "application/octet-stream")
             conn.putheader("Content-Length", str(size))
+            conn.putheader("User-Agent", "pipeline-from-goa-zenodo-uploader/1.0")
             conn.endheaders()
             sent = 0
             t0 = time.time()
