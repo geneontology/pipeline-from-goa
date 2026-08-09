@@ -107,6 +107,19 @@ Only **discard** a draft you are *not* going to publish (a pure throwaway test):
   creators `person_or_org` family/given + identifiers, affiliations name(+ROR
   id)) and override only `version`/`publication_date` (from `summary.txt`
   "Start date:").
+- **The upload PUT's User-Agent header is load-bearing** (2026-08-07): Zenodo's
+  edge kills UA-less large uploads mid-stream — `SSL EOF` ~340 MiB in, no error
+  body, while small UA-less PUTs and any UA-carrying PUT succeed. `http.client`
+  sets no UA by default; the script pins one (`geneontology/1.0 …`). Worked
+  without one on 2026-06-19, so this is a server-side policy that may evolve —
+  if large streams start dying again with healthy API reads, suspect the edge
+  first, not the network path.
+- **A failed large upload can wedge the draft server-side** (2026-08-07): the
+  draft 500s on a plain authenticated GET, and — since a concept carries only
+  one new-version draft — every later `POST …/versions` then 500s too. The
+  script's in-run retries cannot recover from this. Recovery: GET the draft;
+  if it 500s, `DELETE …/draft` (returns 204 even for wedged drafts), then
+  re-run. Three drafts wedged and cleared this way during the 2026-08-05 bless.
 
 ## Testing locally / at full size
 

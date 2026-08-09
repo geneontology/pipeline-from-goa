@@ -228,6 +228,25 @@ If the token is missing or expired, ask the user to create a new one
 via Jenkins: username (top right) -> Security -> API Token -> Add new
 Token.
 
+### Branch discovery is filtered to `main`
+
+The multibranch project restricts branch discovery with a
+`RegexSCMHeadFilterTrait` (regex `main`) — verified from the job config
+and the scan indexing log, 2026-08-08. Consequences, both directions:
+
+- A pushed non-`main` branch is **never indexed or built** — no CI runs
+  on it, so "the branch built fine" can never be evidence for a PR, and
+  a stray branch cannot trigger the mutating stages (which hardcode the
+  `main` skyhook tree and shared buckets — see the 2026-08-07 audit).
+- That config filter is the **only** layer preventing a branch build
+  from clobbering the `main` tree; the Jenkinsfile itself has no branch
+  guard (audit net-new #1, deferred). If the filter is ever loosened to
+  let branches build, add the in-Jenkinsfile guard **first**.
+
+Scans are manual-only (no triggers, no repo webhooks) — a push alone
+never starts anything; "Scan Repository Now" after new `main` commits
+both discovers them and schedules a `main` build.
+
 ### Downloading console logs
 
 Jenkins console logs (`consoleText`) can be extremely large (hundreds
