@@ -74,7 +74,7 @@ enforced.
 |---|---|---|---|
 | 1 | reacto-NEO ontojournal from legacy `skyhook.berkeleybop.org` | `internal-all-gocam-products.sh` | accepted interim (roadmap: port NEO in-pipeline) |
 | 2 | prior-release stats/ontology/refs from `current` for go-stats **diffing** (`-s -n -p -r` + aggregated summaries) | `produce-derivatives.sh` | accepted (decision pending) |
-| 3 | union GAFs + PANTHER `arbre.tgz` re-hosted on go-public S3 (plain http) | `Jenkinsfile` `GOLR_INPUT_GAFS`, `GOLR_INPUT_PANTHER_TREES` | accepted — OWLTools can't read skyhook-HTTPS gzip (owltools#171 / #2); both are gzip |
+| 3 | union GAFs + PANTHER `arbre.tgz` re-hosted on go-public S3 (plain http) | `annotation-download-and-partition.sh`, `publish-arbre-go-public.sh` (upload side only) | **rollback path only** since 2026-08-10 (`1d49ca4`): the golr consumer reads skyhook-HTTPS directly — the "OWLTools can't read skyhook-HTTPS gzip" rationale was a **misdiagnosis** (really owltools#171 redirect-HTML + #329 https-scheme, both fixed in loader image `golr-autoindex:owltools-70527382_2026-08-10`; see operations `docs/golr-index-build.md`). Remove the uploads once the first HTTPS run is green (operations#99) |
 | 4 | NCBITaxon auto-download from OBO Foundry | `gocam-processing.sh` | soft — documented, foreign (non-GO); track toward a pinned source |
 | 5 | `master`/`main` git grabs (go-site, go-stats, minerva, gocam-py, noctua-models) | `Jenkinsfile` `TARGET_*_BRANCH` | soft — allowed by provenance rule 3, but pin the resolved SHA (esp. noctua-models) |
 | 6 | PANTHER upstream fetch (`tree_files.tar.gz` + `names.tab`) from `data.pantherdb.org`, version-locked via `PANTHER_VERSION` | `Jenkinsfile` PANTHER stage | accepted (audit triage 2026-08-07) — foreign (non-GO), version-pinned URL; like entry 4, track toward a mirrored/pinned source |
@@ -103,10 +103,10 @@ lands on the board via `.github/workflows/audit-reminder.yaml` (monthly; it only
   ontology read + go-reports `-c` + PANTHER now sources from this run, not `snapshot` —
   committed on main (718d64e ontology, 7991f1b PANTHER). PANTHER was the last piece: its
   stage was moved ahead of the golr consumer and `arbre.tgz` is now pushed to go-public
-  (Exception 3). The next full build (Scan Repository Now) picks it all up. Watch at build
-  time: `go-amigo.owl` is read by OWLTools — plain (non-gzip) `.owl`, should be fine over
-  skyhook-HTTPS, but if it hits owltools#171, push it to go-public and point plain-HTTP
-  (mirror `GOLR_INPUT_GAFS`).
+  (Exception 3). The next full build (Scan Repository Now) picks it all up.
+  *Update 2026-08-10:* the owltools#171 worry is retired — the loader image now carries a
+  post-#329 owltools (https-capable) and ALL golr inputs incl. the union GAFs read
+  skyhook-HTTPS directly (`1d49ca4`); go-public is rollback-only (Exception 3).
 - **Reproducibility / docker — #31.** floating `ubuntu:noble` (7 stages), unpinned
   in-container toolchain, noctua-models at `master`, NCBITaxon OBO download, two dead
   env vars.

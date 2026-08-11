@@ -78,8 +78,8 @@ parity sweep of the tree will miss. They are enumerated here for that reason.
 | serving surface | source | pushed by | consumer |
 |---|---|---|---|
 | `s3://go-public/files/go-cam/{id}.json` | `internal/gocam-json-per-model/` | `publish-gocam-json-go-public.sh` (`just publish-gocam`, #24) | GO API (`go-fastapi`) → AmiGO / Alliance / MOD widgets via `wc-gocam-viz` |
-| `s3://go-public/skyhook-geneontology-io/union_*.gaf.gz` | `internal/union-gaf-partitions/` | `annotation-download-and-partition.sh` (at build; audit Exception 3) | GOlr indexer (OWLTools) |
-| `s3://go-public/skyhook-geneontology-io/arbre.tgz` | `products/panther/arbre.tgz` | `publish-arbre-go-public.sh` (at build; audit Exception 3) | GOlr indexer (OWLTools) |
+| `s3://go-public/skyhook-geneontology-io/union_*.gaf.gz` | `internal/union-gaf-partitions/` | `annotation-download-and-partition.sh` (at build; audit Exception 3) | none since 2026-08-10 (`1d49ca4`) — GOlr indexer reads skyhook-HTTPS; kept as rollback until operations#99 removes it |
+| `s3://go-public/skyhook-geneontology-io/arbre.tgz` | `products/panther/arbre.tgz` | `publish-arbre-go-public.sh` (at build; audit Exception 3) | none since 2026-08-10 (`1d49ca4`) — GOlr indexer reads skyhook-HTTPS; kept as rollback until operations#99 removes it |
 
 All three require **`--acl public-read`**: `go-public` has no bucket policy and
 no Public Access Block, so public readability is per-object. An upload without
