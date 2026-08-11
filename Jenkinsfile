@@ -128,48 +128,35 @@ pipeline {
 	GOLR_SOLR_MEMORY = "256G"
 	GOLR_LOADER_MEMORY = "256G"
 	// This run's own GOEx-acquired ontology on skyhook, NOT snapshot (#30).
-	// VERIFY before building: OWLTools must be able to read this skyhook-HTTPS .owl.
-	// If it hits owltools#171 (as the union GAFs did), push go-amigo.owl to go-public
-	// S3 and point here instead (mirror GOLR_INPUT_GAFS).
 	GOLR_INPUT_ONTOLOGIES = [
 	    "https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/extensions/go-amigo.owl"
 	].join(" ")
-	// WARNING: hard-coded for the moment.
-	// These union GAFs are served from S3 (go-public) over plain HTTP, NOT from
-	// skyhook HTTPS: OWLTools cannot read the skyhook-HTTPS gzip (EOFException /
-	// URL mangling -- owlcollab/owltools#171), so the annotation stage pushes
-	// union* to s3://go-public/skyhook-geneontology-io/ for this consumer. Do NOT
-	// switch back to the commented-out skyhook URLs unless OWLTools is fixed.
-	// See geneontology/pipeline-from-goa#2.
+	// Union GAFs over skyhook HTTPS. The old "OWLTools cannot read
+	// skyhook-HTTPS gzip" (#2) was a misdiagnosis: the pre-2026 loader jar
+	// rejected https:// URLs outright (owlcollab/owltools#329) and, pointed at
+	// http://, gunzipped Cloudflare's 301 HTML (owltools#171). The image pinned
+	// in 'Produce derivatives' carries a post-#329 owltools, verified equivalent
+	// on identical inputs (operations:docs/golr-index-build.md, Verification).
+	// The go-public S3 mirror is still populated by the annotation stage;
+	// rollback = re-pin the previous image + point these back at
+	// http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/ .
 	GOLR_INPUT_GAFS = [
-	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_1.gaf.gz",
-	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_2.gaf.gz",
-	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_3.gaf.gz",
-	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_4.gaf.gz",
-	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_5.gaf.gz",
-	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_6.gaf.gz",
-	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_7.gaf.gz",
-	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_8.gaf.gz",
-	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_9.gaf.gz",
-	    // "https://skyhook.geneontology.io/pipeline-from-goa/main/union_10.gaf.gz"
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_1.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_2.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_3.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_4.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_5.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_6.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_7.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_8.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_9.gaf.gz',
-	    'http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/union_10.gaf.gz'
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_1.gaf.gz",
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_2.gaf.gz",
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_3.gaf.gz",
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_4.gaf.gz",
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_5.gaf.gz",
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_6.gaf.gz",
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_7.gaf.gz",
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_8.gaf.gz",
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_9.gaf.gz",
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_10.gaf.gz"
 	].join(" ")
 	// This run's own PANTHER arbre.tgz, produced by the 'PANTHER trees' stage
-	// (moved ahead of this consumer) and pushed to go-public S3. Served plain-
-	// HTTP, not skyhook-HTTPS, because arbre.tgz is gzip and OWLTools cannot read
-	// skyhook-HTTPS gzip (owltools#171 / #2) -- same treatment as the union GAFs
-	// above. #30.
+	// (moved ahead of this consumer), over skyhook HTTPS -- same story as the
+	// union GAFs above. #30.
 	GOLR_INPUT_PANTHER_TREES = [
-	    "http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/arbre.tgz"
+	    "https://skyhook.geneontology.io/pipeline-from-goa/main/products/panther/arbre.tgz"
 	].join(" ")
 
 	///
@@ -501,7 +488,7 @@ pipeline {
 			      -e GOLR_INPUT_PANTHER_TREES="\$GOLR_INPUT_PANTHER_TREES" \\
 			      -e GOLR_SOLR_MEMORY="\$GOLR_SOLR_MEMORY" \\
 			      -e GOLR_LOADER_MEMORY="\$GOLR_LOADER_MEMORY" \\
-			      geneontology/golr-autoindex:28a693d28b37196d3f79acdea8c0406c9930c818_2022-03-17T171930_master \\
+			      geneontology/golr-autoindex:owltools-70527382_2026-08-10 \\
 			      bash /workspace/scripts/produce-derivatives.sh
 			"""
 		    }
