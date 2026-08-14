@@ -124,7 +124,7 @@ su jenkins -c "gzip $WORK/unified.gpad"
 # --dump-owl-json needs a reacto-neo ontojournal and minerva pulls a remote
 # NEO for it. NEO is not yet produced in-pipeline, so we keep using this
 # journal until NEO is ported in.
-su jenkins -c "wget -q -O $WORK/blazegraph-go-lego-reacto-neo.jnl.gz http://skyhook.berkeleybop.org/blazegraph-go-lego-reacto-neo.jnl.gz"
+su jenkins -c "wget -q -O $WORK/blazegraph-go-lego-reacto-neo.jnl.gz https://skyhook.berkeleybop.org/blazegraph-go-lego-reacto-neo.jnl.gz"
 su jenkins -c "gunzip $WORK/blazegraph-go-lego-reacto-neo.jnl.gz"
 
 su jenkins -c "mkdir -p $WORK/jsonout"
