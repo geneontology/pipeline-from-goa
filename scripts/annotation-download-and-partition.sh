@@ -44,7 +44,6 @@
 #   /workspace -- Jenkins workspace (go-site checked out for
 #                 scripts/partition_and_merge_gaf.py)
 #   /secrets/skyhook_key -- skyhook ssh key
-#   /secrets/s3cmd.cfg -- s3cmd configuration
 
 set -euo pipefail
 
@@ -90,7 +89,7 @@ apt_install_retry() {
 # Install system dependencies. awscli is installed via pip because
 # Ubuntu Noble dropped it from apt (see issue #7's e5a1f95 fix).
 DEBIAN_FRONTEND=noninteractive apt-get update
-apt_install_retry python3 python3-pip openssh-client rsync s3cmd
+apt_install_retry python3 python3-pip openssh-client rsync
 pip3 install --break-system-packages awscli
 
 # Create jenkins user matching host UID/GID.
@@ -215,13 +214,8 @@ su jenkins -c 'ls -AlF /tmp/merged'
 # Copy merged files to skyhook.
 rsync_retry '/tmp/merged/' "${SKYHOOK_MAIN}/internal/union-gaf-partitions/"
 
-# Push merged files to S3.
-# Copy the s3cmd config to a writable location and make it readable
-# for the jenkins user (the bind-mounted /secrets/s3cmd.cfg is
-# read-only).
-cp /secrets/s3cmd.cfg /tmp/s3cmd.cfg
-chmod a+r /tmp/s3cmd.cfg
-su jenkins -c 's3cmd -c /tmp/s3cmd.cfg --acl-public put /tmp/merged/union* s3://go-public/skyhook-geneontology-io/'
+# (The go-public plain-HTTP mirror push of union* is retired -- the golr
+# consumer reads the skyhook-HTTPS copies rsync'd above; operations#99.)
 
 # Fix ownership so jenkins user can clean up.
 chown -R "$JENKINS_UID:$JENKINS_GID" /workspace || true

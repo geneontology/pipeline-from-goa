@@ -137,9 +137,10 @@ pipeline {
 	// http://, gunzipped Cloudflare's 301 HTML (owltools#171). The image pinned
 	// in 'Produce derivatives' carries a post-#329 owltools, verified equivalent
 	// on identical inputs (operations:docs/golr-index-build.md, Verification).
-	// The go-public S3 mirror is still populated by the annotation stage;
-	// rollback = re-pin the previous image + point these back at
-	// http://go-public.s3.us-east-1.amazonaws.com/skyhook-geneontology-io/ .
+	// The go-public plain-HTTP mirror (skyhook-geneontology-io/ prefix) is
+	// RETIRED -- the uploads were removed after the first green HTTPS run
+	// (operations#99; fleet fan-out confirmed zero other consumers).
+	// Rollback = revert the retirement commit + re-pin the previous image.
 	GOLR_INPUT_GAFS = [
 	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_1.gaf.gz",
 	    "https://skyhook.geneontology.io/pipeline-from-goa/main/internal/union-gaf-partitions/union_2.gaf.gz",
@@ -335,7 +336,6 @@ pipeline {
 		    withCredentials([
 			file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'),
 			string(credentialsId: 'skyhook-machine-private', variable: 'SKYHOOK_MACHINE'),
-			file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON'),
 			string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'),
 			string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')
 		    ]) {
@@ -346,7 +346,6 @@ pipeline {
 			      -u root:root \\
 			      -v "\$WORKSPACE":/workspace \\
 			      -v "\$SKYHOOK_IDENTITY":/secrets/skyhook_key:ro \\
-			      -v "\$S3CMD_JSON":/secrets/s3cmd.cfg:ro \\
 			      -e SKYHOOK_MACHINE="\$SKYHOOK_MACHINE" \\
 			      -e AWS_ACCESS_KEY_ID="\$AWS_ACCESS_KEY_ID" \\
 			      -e AWS_SECRET_ACCESS_KEY="\$AWS_SECRET_ACCESS_KEY" \\
@@ -419,24 +418,9 @@ pipeline {
 			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY ./go-site/arbre.tgz skyhook@$SKYHOOK_MACHINE:/home/skyhook/pipeline-from-goa/main/products/panther/'
 		    }
 
-		    // Also publish arbre.tgz to go-public S3 over plain HTTP for the
-		    // golr consumer: arbre.tgz is gzip and OWLTools cannot read
-		    // skyhook-HTTPS gzip (owltools#171 / #2), exactly like the union
-		    // GAFs -- so GOLR_INPUT_PANTHER_TREES reads it from go-public
-		    // plain-HTTP. Container + s3cmd, mirroring the union-GAF push in
-		    // annotation-download-and-partition.sh (the host has no s3cmd). #30.
-		    sh "mkdir -p ./scripts && curl -fsSL https://raw.githubusercontent.com/geneontology/pipeline-from-goa/${env.BRANCH_NAME}/scripts/publish-arbre-go-public.sh -o ./scripts/publish-arbre-go-public.sh"
-		    withCredentials([file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON')]) {
-			sh """
-			    docker run --rm \\
-			      --init \\
-			      -u root:root \\
-			      -v "\$WORKSPACE":/workspace \\
-			      -v "\$S3CMD_JSON":/secrets/s3cmd.cfg:ro \\
-			      ubuntu:noble \\
-			      bash /workspace/scripts/publish-arbre-go-public.sh
-			"""
-		    }
+		    // (The go-public plain-HTTP copy of arbre.tgz is retired --
+		    // GOLR_INPUT_PANTHER_TREES reads the skyhook-HTTPS copy above;
+		    // operations#99.)
 		}
 	    }
 	}
