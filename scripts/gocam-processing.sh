@@ -71,40 +71,93 @@ su jenkins -c 'git config --global --add safe.directory /workspace/gocam-py'
 su jenkins -c 'uv sync --all-extras'
 
 # Set up working directory structure.
-su jenkins -c 'mkdir -p /tmp/gocam-work/input /tmp/gocam-work/01-gocam-models /tmp/gocam-work/02-true-gocams /tmp/gocam-work/02-pseudo-gocams /tmp/gocam-work/03-indexed-true-gocams /tmp/gocam-work/04-index-files /tmp/gocam-work/05-browser-search-docs /tmp/gocam-work/go-cam-stats /tmp/gocam-work/reports'
+su jenkins -c '
+    mkdir -p \
+        /tmp/gocam-work/input \
+        /tmp/gocam-work/01-gocam-models \
+        /tmp/gocam-work/02-true-gocams \
+        /tmp/gocam-work/02-pseudo-gocams \
+        /tmp/gocam-work/03-indexed-true-gocams \
+        /tmp/gocam-work/04-index-files \
+        /tmp/gocam-work/05-browser-search-docs \
+        /tmp/gocam-work/go-cam-stats \
+        /tmp/gocam-work/reports \
+        /tmp/gocam-work/ontology \
+        /tmp/gocam-work/metadata
+'
 
 # Download and extract Minerva JSON tarball.
 su jenkins -c "wget -q -O /tmp/gocam-work/minerva-models.tar.gz '${MINERVA_JSON_TARBALL_URL}'"
 su jenkins -c 'tar -xzf /tmp/gocam-work/minerva-models.tar.gz -C /tmp/gocam-work/input'
 
 # Data provenance: GO ontology from our own in-pipeline output on skyhook;
-# GOC groups metadata grabbed at run from go-site (canonical git repo).
+# GOC users/groups metadata grabbed at run from go-site (canonical git repo).
 # Neither comes from current.geneontology.org.
-su jenkins -c 'wget -q -O /tmp/gocam-work/go.obo https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/go.obo'
-su jenkins -c "wget -q -O /tmp/gocam-work/groups.yaml https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/metadata/groups.yaml"
+su jenkins -c 'wget -q -O /tmp/gocam-work/ontology/go.obo https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/go.obo'
+su jenkins -c 'wget -q -O /tmp/gocam-work/ontology/go.json https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/go.json'
+su jenkins -c "wget -q -O /tmp/gocam-work/metadata/users.yaml https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/metadata/users.yaml"
+su jenkins -c "wget -q -O /tmp/gocam-work/metadata/groups.yaml https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/metadata/groups.yaml"
 
-# Step 1: Convert Minerva models to GO-CAM models.
-su jenkins -c 'uv run python pipeline/convert_minerva_models_to_gocam_models.py --input-dir /tmp/gocam-work/input --output-dir /tmp/gocam-work/01-gocam-models --report-file /tmp/gocam-work/reports/01-convert.jsonl --verbose'
+# Step 1: Convert models from Minerva format to standard format.
+su jenkins -c '
+    uv run python pipeline/convert_minerva_models_to_gocam_models.py \
+        --input-dir /tmp/gocam-work/input \
+        --output-dir /tmp/gocam-work/01-gocam-models \
+        --log-file /tmp/gocam-work/reports/01-convert.jsonl \
+        --verbose
+'
 
-# Step 2: Filter true GO-CAM models from pseudo GO-CAMs.
-su jenkins -c 'uv run python pipeline/filter_true_gocam_models.py --input-dir /tmp/gocam-work/01-gocam-models --output-dir /tmp/gocam-work/02-true-gocams --pseudo-gocam-output-dir /tmp/gocam-work/02-pseudo-gocams --report-file /tmp/gocam-work/reports/02-filter.jsonl --verbose'
+# Step 2: Filter non-production models and split true GO-CAM models from pseudo GO-CAMs.
+su jenkins -c '
+    uv run python pipeline/filter_true_gocam_models.py \
+        --input-dir /tmp/gocam-work/01-gocam-models \
+        --output-dir /tmp/gocam-work/02-true-gocams \
+        --pseudo-gocam-output-dir /tmp/gocam-work/02-pseudo-gocams \
+        --log-file /tmp/gocam-work/reports/02-filter.jsonl \
+        --verbose
+'
 
 # Step 3: Add query index (OAK lookups) to models.
 # Uses released GO ontology via pronto adapter.
 # NCBITaxon is not a GO product, so it still auto-downloads from
 # OBO Foundry (sqlite:obo:ncbitaxon).
-su jenkins -c 'uv run python pipeline/add_query_index_to_models.py --input-dir /tmp/gocam-work/02-true-gocams --output-dir /tmp/gocam-work/03-indexed-true-gocams --report-file /tmp/gocam-work/reports/03-index.jsonl --go-adapter-descriptor pronto:/tmp/gocam-work/go.obo --goc-groups-yaml /tmp/gocam-work/groups.yaml --verbose'
+su jenkins -c '
+    uv run python pipeline/add_query_index_to_models.py \
+        --input-dir /tmp/gocam-work/02-true-gocams \
+        --output-dir /tmp/gocam-work/03-indexed-true-gocams \
+        --log-file /tmp/gocam-work/reports/03-index.jsonl \
+        --go-adapter-descriptor pronto:/tmp/gocam-work/ontology/go.obo \
+        --goc-groups-yaml /tmp/gocam-work/metadata/groups.yaml \
+        --verbose
+'
 
-# Step 4: Generate index files (~6 JSON files).
-su jenkins -c 'uv run python pipeline/generate_index_files.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/04-index-files --report-file /tmp/gocam-work/reports/04-index-files.jsonl --verbose'
+# Step 4: Generate index files (7 JSON files).
+su jenkins -c '
+    uv run python pipeline/generate_index_files.py \
+        --input-dir /tmp/gocam-work/03-indexed-true-gocams \
+        --output-dir /tmp/gocam-work/04-index-files \
+        --log-file /tmp/gocam-work/reports/04-index-files.jsonl \
+        --verbose
+'
 
 # Step 5: Generate GO-CAM Browser search docs (1 JSON file).
-su jenkins -c 'uv run python pipeline/generate_go_cam_browser_search_docs.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json --report-file /tmp/gocam-work/reports/05-browser-search.jsonl --verbose'
+su jenkins -c '
+    uv run python pipeline/generate_go_cam_browser_search_docs.py \
+        --input-dir /tmp/gocam-work/03-indexed-true-gocams \
+        --output /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json \
+        --log-file /tmp/gocam-work/reports/05-browser-search.jsonl \
+        --verbose
+'
 
 # Step 6: GO-CAM model statistics (per-model / contributor / provider + aggregate
 # JSON, plus id_to_label.json). Input is the indexed "true"/filtered GO-CAMs
 # (same as Steps 4/5); production models only, by default. gocam-py #218 / #27.
-su jenkins -c 'uv run python pipeline/output_stats_for_gocam_models.py --input-dir /tmp/gocam-work/03-indexed-true-gocams --output-dir /tmp/gocam-work/go-cam-stats --verbose'
+su jenkins -c '
+    uv run python pipeline/output_stats_for_gocam_models.py \
+        --input-dir /tmp/gocam-work/03-indexed-true-gocams \
+        --output-dir /tmp/gocam-work/go-cam-stats \
+        --verbose
+'
 
 # Step 7: Render the Step 6 stats JSON into HTML/TSV report pages, IN PLACE
 # under go-cam-stats, via go-site's reports-go-cam-stats.py (go-site#2706). It
@@ -115,14 +168,33 @@ su jenkins -c 'uv run python pipeline/output_stats_for_gocam_models.py --input-d
 su jenkins -c "wget -q -O /tmp/gocam-work/reports-go-cam-stats.py https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/scripts/reports-go-cam-stats.py"
 su jenkins -c "wget -q -O /tmp/gocam-work/go-cam-stats-template.html https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/scripts/go-cam-stats-template.html"
 su jenkins -c "wget -q -O /tmp/gocam-work/go-cam-records-template.html https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/scripts/go-cam-records-template.html"
-su jenkins -c 'mkdir -p /tmp/gocam-work/metadata'
-su jenkins -c "wget -q -O /tmp/gocam-work/metadata/users.yaml https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/metadata/users.yaml"
-su jenkins -c "wget -q -O /tmp/gocam-work/metadata/groups.yaml https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/metadata/groups.yaml"
-su jenkins -c 'wget -q -O /tmp/gocam-work/go.json https://skyhook.geneontology.io/pipeline-from-goa/main/ontology/go.json'
-su jenkins -c "uv run --with click --with pystache --with pyyaml python3 /tmp/gocam-work/reports-go-cam-stats.py --directory /tmp/gocam-work/go-cam-stats --template /tmp/gocam-work/go-cam-stats-template.html --template-records /tmp/gocam-work/go-cam-records-template.html --output /tmp/gocam-work/go-cam-stats --metadata /tmp/gocam-work/metadata --resource /tmp/gocam-work/go.json --date '${START_DATE}'"
+su jenkins -c "
+    uv run --with click --with pystache --with pyyaml python3 /tmp/gocam-work/reports-go-cam-stats.py \
+        --directory /tmp/gocam-work/go-cam-stats \
+        --template /tmp/gocam-work/go-cam-stats-template.html \
+        --template-records /tmp/gocam-work/go-cam-records-template.html \
+        --output /tmp/gocam-work/go-cam-stats \
+        --metadata /tmp/gocam-work/metadata \
+        --resource /tmp/gocam-work/ontology/go.json \
+        --date '${START_DATE}'
+"
 
-# Lastly: Generate summary report (1 Excel file).
-su jenkins -c "uv run python pipeline/generate_log_summary.py --logs-dir /tmp/gocam-work/reports --output /tmp/gocam-work/reports/summary.xlsx --metadata 'Release date=${START_DATE}' --metadata 'Pipeline name=pipeline-from-goa' --metadata 'Pipeline branch=${BRANCH_NAME}' --verbose"
+# Lastly: Generate summary reports. 1 Excel file with the result of every model
+# represented. 1 directory of HTML files with the result of only sufficiently
+# GO-CAM-like models (those that were not filtered in step 1 and have
+# status=production), one HTML file per contributing group, plus one index HTML file.
+su jenkins -c "
+    uv run python pipeline/generate_log_summary.py \
+        --logs-dir /tmp/gocam-work/reports \
+        --excel-output /tmp/gocam-work/reports/summary.xlsx \
+        --html-output-dir /tmp/gocam-work/reports/summary-html \
+        --goc-users-yaml /tmp/gocam-work/metadata/users.yaml \
+        --goc-groups-yaml /tmp/gocam-work/metadata/groups.yaml \
+        --metadata 'Release date=${START_DATE}' \
+        --metadata 'Pipeline name=pipeline-from-goa' \
+        --metadata 'Pipeline branch=${BRANCH_NAME}' \
+        --verbose
+"
 
 # Helper for retried scp.
 scp_retry() {
