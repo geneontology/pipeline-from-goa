@@ -188,6 +188,7 @@ su jenkins -c "
         --logs-dir /tmp/gocam-work/reports \
         --excel-output /tmp/gocam-work/reports/summary.xlsx \
         --html-output-dir /tmp/gocam-work/reports/summary-html \
+        --html-index-filename "go-cam_pipeline_report.html" \
         --goc-users-yaml /tmp/gocam-work/metadata/users.yaml \
         --goc-groups-yaml /tmp/gocam-work/metadata/groups.yaml \
         --metadata 'Release date=${START_DATE}' \
