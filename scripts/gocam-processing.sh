@@ -97,7 +97,9 @@ su jenkins -c 'wget -q -O /tmp/gocam-work/ontology/go.json https://skyhook.geneo
 su jenkins -c "wget -q -O /tmp/gocam-work/metadata/users.yaml https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/metadata/users.yaml"
 su jenkins -c "wget -q -O /tmp/gocam-work/metadata/groups.yaml https://raw.githubusercontent.com/geneontology/go-site/${TARGET_GO_SITE_BRANCH}/metadata/groups.yaml"
 
-# Step 1: Convert models from Minerva format to standard format.
+# Step 1: Convert models from Minerva format to standard format and sort into True
+# GO-CAMs and Pseudo GO-CAMs. Models which are not GO-CAM-like at all are excluded from
+# both outputs; they are only reported in the log file.
 su jenkins -c '
     uv run python pipeline/convert_minerva_models_to_gocam_models.py \
         --input-dir /tmp/gocam-work/input \
@@ -170,9 +172,8 @@ su jenkins -c "
 "
 
 # Lastly: Generate summary reports. 1 Excel file with the result of every model
-# represented. 1 directory of HTML files with the result of only sufficiently
-# GO-CAM-like models (those that were not filtered in step 1 and have
-# status=production), one HTML file per contributing group, plus one index HTML file.
+# represented. 1 directory of HTML files with the result of production True GO-CAMs and
+# Pseudo GO-CAMs, one HTML file per contributing group, plus one index HTML file.
 su jenkins -c "
     uv run python pipeline/generate_log_summary.py \
         --logs-dir /tmp/gocam-work/reports \
