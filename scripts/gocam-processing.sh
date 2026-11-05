@@ -74,12 +74,11 @@ su jenkins -c 'uv sync --all-extras'
 su jenkins -c '
     mkdir -p \
         /tmp/gocam-work/input \
-        /tmp/gocam-work/01-gocam-models \
-        /tmp/gocam-work/02-true-gocams \
-        /tmp/gocam-work/02-pseudo-gocams \
-        /tmp/gocam-work/03-indexed-true-gocams \
-        /tmp/gocam-work/04-index-files \
-        /tmp/gocam-work/05-browser-search-docs \
+        /tmp/gocam-work/01-true-gocams \
+        /tmp/gocam-work/01-pseudo-gocams \
+        /tmp/gocam-work/02-indexed-true-gocams \
+        /tmp/gocam-work/03-index-files \
+        /tmp/gocam-work/04-browser-search-docs \
         /tmp/gocam-work/go-cam-stats \
         /tmp/gocam-work/reports \
         /tmp/gocam-work/ontology \
@@ -102,64 +101,55 @@ su jenkins -c "wget -q -O /tmp/gocam-work/metadata/groups.yaml https://raw.githu
 su jenkins -c '
     uv run python pipeline/convert_minerva_models_to_gocam_models.py \
         --input-dir /tmp/gocam-work/input \
-        --output-dir /tmp/gocam-work/01-gocam-models \
+        --output-dir /tmp/gocam-work/01-true-gocams \
+        --pseudo-gocam-output-dir /tmp/gocam-work/01-pseudo-gocams \
         --log-file /tmp/gocam-work/reports/01-convert.jsonl \
         --verbose
 '
 
-# Step 2: Filter non-production models and split true GO-CAM models from pseudo GO-CAMs.
-su jenkins -c '
-    uv run python pipeline/filter_true_gocam_models.py \
-        --input-dir /tmp/gocam-work/01-gocam-models \
-        --output-dir /tmp/gocam-work/02-true-gocams \
-        --pseudo-gocam-output-dir /tmp/gocam-work/02-pseudo-gocams \
-        --log-file /tmp/gocam-work/reports/02-filter.jsonl \
-        --verbose
-'
-
-# Step 3: Add query index (OAK lookups) to models.
+# Step 2: Add query index (OAK lookups) to models.
 # Uses released GO ontology via pronto adapter.
 # NCBITaxon is not a GO product, so it still auto-downloads from
 # OBO Foundry (sqlite:obo:ncbitaxon).
 su jenkins -c '
     uv run python pipeline/add_query_index_to_models.py \
-        --input-dir /tmp/gocam-work/02-true-gocams \
-        --output-dir /tmp/gocam-work/03-indexed-true-gocams \
-        --log-file /tmp/gocam-work/reports/03-index.jsonl \
+        --input-dir /tmp/gocam-work/01-true-gocams \
+        --output-dir /tmp/gocam-work/02-indexed-true-gocams \
+        --log-file /tmp/gocam-work/reports/02-index.jsonl \
         --go-adapter-descriptor pronto:/tmp/gocam-work/ontology/go.obo \
         --goc-groups-yaml /tmp/gocam-work/metadata/groups.yaml \
         --verbose
 '
 
-# Step 4: Generate index files (7 JSON files).
+# Step 3: Generate index files (7 JSON files).
 su jenkins -c '
     uv run python pipeline/generate_index_files.py \
-        --input-dir /tmp/gocam-work/03-indexed-true-gocams \
-        --output-dir /tmp/gocam-work/04-index-files \
-        --log-file /tmp/gocam-work/reports/04-index-files.jsonl \
+        --input-dir /tmp/gocam-work/02-indexed-true-gocams \
+        --output-dir /tmp/gocam-work/03-index-files \
+        --log-file /tmp/gocam-work/reports/03-index-files.jsonl \
         --verbose
 '
 
-# Step 5: Generate GO-CAM Browser search docs (1 JSON file).
+# Step 4: Generate GO-CAM Browser search docs (1 JSON file).
 su jenkins -c '
     uv run python pipeline/generate_go_cam_browser_search_docs.py \
-        --input-dir /tmp/gocam-work/03-indexed-true-gocams \
-        --output /tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json \
-        --log-file /tmp/gocam-work/reports/05-browser-search.jsonl \
+        --input-dir /tmp/gocam-work/02-indexed-true-gocams \
+        --output /tmp/gocam-work/04-browser-search-docs/go-cam-browser-search-docs.json \
+        --log-file /tmp/gocam-work/reports/04-browser-search.jsonl \
         --verbose
 '
 
-# Step 6: GO-CAM model statistics (per-model / contributor / provider + aggregate
+# Step 5: GO-CAM model statistics (per-model / contributor / provider + aggregate
 # JSON, plus id_to_label.json). Input is the indexed "true"/filtered GO-CAMs
-# (same as Steps 4/5); production models only, by default. gocam-py #218 / #27.
+# (same as Steps 3/4); production models only, by default. gocam-py #218 / #27.
 su jenkins -c '
     uv run python pipeline/output_stats_for_gocam_models.py \
-        --input-dir /tmp/gocam-work/03-indexed-true-gocams \
+        --input-dir /tmp/gocam-work/02-indexed-true-gocams \
         --output-dir /tmp/gocam-work/go-cam-stats \
         --verbose
 '
 
-# Step 7: Render the Step 6 stats JSON into HTML/TSV report pages, IN PLACE
+# Step 6: Render the Step 5 stats JSON into HTML/TSV report pages, IN PLACE
 # under go-cam-stats, via go-site's reports-go-cam-stats.py (go-site#2706). It
 # writes named go-cam-*.html pages (go-cam-aggregate-stats.html is the entry
 # point) -- never index.html -- so they coexist with the published JSON and the
@@ -213,10 +203,10 @@ scp_retry() {
 }
 
 # Upload release artifacts to skyhook.
-scp_retry "-r" "/tmp/gocam-work/02-true-gocams/*"        "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/go-cams/json/"
-scp_retry "-r" "/tmp/gocam-work/03-indexed-true-gocams/*" "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/products/indexed-go-cams/"
-scp_retry "-r" "/tmp/gocam-work/04-index-files/*"        "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/go-cams/index-json/"
-scp_retry ""   "/tmp/gocam-work/05-browser-search-docs/go-cam-browser-search-docs.json" "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/products/go-cam-search/"
+scp_retry "-r" "/tmp/gocam-work/01-true-gocams/*"        "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/go-cams/json/"
+scp_retry "-r" "/tmp/gocam-work/02-indexed-true-gocams/*" "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/products/indexed-go-cams/"
+scp_retry "-r" "/tmp/gocam-work/03-index-files/*"        "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/go-cams/index-json/"
+scp_retry ""   "/tmp/gocam-work/04-browser-search-docs/go-cam-browser-search-docs.json" "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/products/go-cam-search/"
 scp_retry "-r" "/tmp/gocam-work/reports/*"               "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/reports/go-cam/"
 scp_retry "-r" "/tmp/gocam-work/go-cam-stats/*"          "skyhook@${SKYHOOK_MACHINE}:/home/skyhook/pipeline-from-goa/main/reports/go-cam-stats/"
 
