@@ -144,8 +144,18 @@ su jenkins -c 'git config --global --add safe.directory /workspace/gocam-py'
 su jenkins -c 'uv sync --all-extras'
 
 # Convert Minerva JSON to gocam-py JSON.
-su jenkins -c "mkdir -p $WORK/gocam-json"
-su jenkins -c "uv run python pipeline/convert_minerva_models_to_gocam_models.py --input-dir $WORK/jsonout --output-dir $WORK/gocam-json --verbose"
+su jenkins -c "
+    mkdir -p \
+        $WORK/gocam-json \
+        $WORK/pseudo-gocams-not-used
+"
+su jenkins -c "
+    uv run python pipeline/convert_minerva_models_to_gocam_models.py \
+        --input-dir $WORK/jsonout \
+        --output-dir $WORK/gocam-json \
+        --pseudo-gocam-output-dir $WORK/pseudo-gocams-not-used \
+        --verbose
+"
 
 # Convert gocam-py JSON to YAML via Model class.
 # The YAML must come from gocam-py's Model serialization, not a
